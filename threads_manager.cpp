@@ -269,7 +269,7 @@ static void signal_handler_child(int sig)
 }
 //======================================================================
 Connect *create_req();
-int write_to_pipe(int fd, int *data, int size);
+int write_to_pipe(int fd, char *data, int size);
 //======================================================================
 void manager(int sockServer, unsigned int numProc, int fd_in)
 {
@@ -392,7 +392,8 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
     fdrd[1].fd = sockServer;
     fdrd[1].events = POLLIN;
 
-    int status = CONNECT_IGN, child_status = CONNECT_IGN, num_fd = 1;
+    char status = CONNECT_IGN, child_status = CONNECT_IGN;
+    int num_fd = 1;
 
     while (1)
     {
@@ -543,7 +544,7 @@ Connect *create_req(void)
     return req;
 }
 //======================================================================
-int write_to_pipe(int fd, int *data, int size)
+int write_to_pipe(int fd, char *data, int size)
 {
     int ret, err;
 a1: 

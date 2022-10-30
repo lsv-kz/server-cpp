@@ -213,7 +213,6 @@ int poll_(int num_chld, int i, int nfd, RequestManager *ReqMan)
 
     for ( ; (i < nfd) && (ret > 0); ++i)
     {
-        --ret;
         Connect *r = conn_array[i];
         if (pollfd_array[i].revents == POLLOUT)
         {
@@ -239,6 +238,7 @@ int poll_(int num_chld, int i, int nfd, RequestManager *ReqMan)
                 r->sock_timer = 0;
                 print_err(r, "<%s:%d> Error: EAGAIN\n", __func__, __LINE__);
             }
+            --ret;
         }
         else if (pollfd_array[i].revents == POLLIN)
         {
@@ -258,6 +258,7 @@ int poll_(int num_chld, int i, int nfd, RequestManager *ReqMan)
             }
             else
                 r->sock_timer = 0;
+            --ret;
         }
         else if (pollfd_array[i].revents)
         {
@@ -273,6 +274,7 @@ int poll_(int num_chld, int i, int nfd, RequestManager *ReqMan)
 
             del_from_list(r);
             end_response(r);
+            --ret;
         }
     }
 

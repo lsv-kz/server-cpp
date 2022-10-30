@@ -27,7 +27,7 @@ static void signal_handler(int sig)
     if (sig == SIGINT)
     {
         print_err("<main> ####### SIGINT #######\n");
-        int status = PROC_CLOSE;
+        char status = PROC_CLOSE;
         write(pfd[1], &status, sizeof(status));
     }
     else if (sig == SIGTERM)
@@ -44,14 +44,14 @@ static void signal_handler(int sig)
     else if (sig == SIGUSR1)
     {
         fprintf(stderr, "<%s> ####### SIGUSR1 #######\n", __func__);
-        int status = PROC_CLOSE;
+        char status = PROC_CLOSE;
         write(pfd[1], &status, sizeof(status));
         restart = 1;
     }
     else if (sig == SIGUSR2)
     {
         fprintf(stderr, "<%s> ####### SIGUSR2 #######\n", __func__);
-        int status = PROC_CLOSE;
+        char status = PROC_CLOSE;
         write(pfd[1], &status, sizeof(status));
     }
     else
@@ -337,7 +337,8 @@ int main_proc()
     //------------------------------------------------------------------
     create_proc(conf->NumProc);
     //------------------------------------------------------------------
-    int status = CONNECT_WAIT, ret;
+    char status = CONNECT_WAIT;
+    int ret;
     if ((ret = write(pfd[1], &status, sizeof(status))) < 0)
     {
         print_err("<%s:%d> Error write(): %s\n", __func__, __LINE__, strerror(errno));
