@@ -7,6 +7,7 @@ int Connect::serverSocket;
 
 int create_server_socket(const Config *c);
 int read_conf_file(const char *path_conf);
+void free_fcgi_list();
 void manager(int, int);
 int set_uid();
 
@@ -18,6 +19,8 @@ static string conf_path;
 static int pfd[2];
 
 static int start = 0, restart = 1;
+
+static pid_t pid_child;
 //======================================================================
 static void signal_handler(int sig)
 {
@@ -26,6 +29,12 @@ static void signal_handler(int sig)
         print_err("<main> ####### SIGINT #######\n");
         int status = PROC_CLOSE;
         write(pfd[1], &status, sizeof(status));
+    }
+    else if (sig == SIGTERM)
+    {
+        print_err("<main> ####### SIGTERM #######\n");
+        kill(pid_child, SIGTERM);
+        exit(0);
     }
     else if (sig == SIGSEGV)
     {
@@ -59,7 +68,7 @@ void create_proc(int NumProc)
         exit(1);
     }
 
-    pid_t pid_child = create_child(sockServer, 0, pfd, -1);
+    pid_child = create_child(sockServer, 0, pfd, -1);
     if (pid_child < 0)
     {
         fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
@@ -74,7 +83,7 @@ void print_help(const char *name)
                     "   -h              : help\n"
                     "   -p              : print parameters\n"
                     "   -c configfile   : default: \"./server.conf\"\n"
-                    "   -s signal       : restart, close\n", name);
+                    "   -s signal       : restart, close, abort\n", name);
 }
 //======================================================================
 void print_limits()
@@ -140,7 +149,7 @@ void print_config()
     fcgi_list_addr *i = conf->fcgi_list;
     for (; i; i = i->next)
     {
-        cout << "   [" << i->scrpt_name.c_str() << " : " << i->addr.c_str() << "]\n";
+        cout << "   [" << i->script_name.c_str() << " : " << i->addr.c_str() << "]\n";
     }
 }
 //======================================================================
@@ -197,6 +206,8 @@ int main(int argc, char *argv[])
                 sig_send = SIGUSR1;
             else if (!strcmp(sig, "close"))
                 sig_send = SIGUSR2;
+            else if (!strcmp(sig, "abort"))
+                sig_send = SIGTERM;
             else
             {
                 fprintf(stderr, "<%d> ? option -s: %s\n", __LINE__, sig);
@@ -266,6 +277,12 @@ int main(int argc, char *argv[])
                 break;
             }
 
+            if (signal(SIGTERM, signal_handler) == SIG_ERR)
+            {
+                fprintf(stderr, "<%s:%d> Error signal(SIGTERM): %s\n", __func__, __LINE__, strerror(errno));
+                break;
+            }
+
             if (signal(SIGSEGV, signal_handler) == SIG_ERR)
             {
                 fprintf(stderr, "<%s:%d> Error signal(SIGSEGV): %s\n", __func__, __LINE__, strerror(errno));
@@ -331,6 +348,7 @@ int main_proc()
     }
 
     close(sockServer);
+    free_fcgi_list();
 
     while ((pid = wait(NULL)) != -1)
     {

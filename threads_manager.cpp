@@ -241,12 +241,19 @@ void thr_create_manager(int numProc, RequestManager *ReqMan)
 static unsigned int nProc;
 static RequestManager *RM;
 static unsigned long allConn = 0;
+static pid_t pid_child;
 //======================================================================
 static void signal_handler_child(int sig)
 {
     if (sig == SIGINT)
     {
         //print_err("[%d] <%s:%d> ### SIGINT ### all_req=%d\n", nProc, __func__, __LINE__, all_req);
+    }
+    else if (sig == SIGTERM)
+    {
+        print_err("<main> ####### SIGTERM #######\n");
+        kill(pid_child, SIGTERM);
+        exit(0);
     }
     else if (sig == SIGSEGV)
     {
@@ -277,7 +284,8 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
             exit(1);
         }
 
-        if (create_child(sockServer, numProc + 1, pfd, fd_in) == 0)
+        pid_child = create_child(sockServer, numProc + 1, pfd, fd_in);
+        if (pid_child < 0)
         {
             fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
             exit(1);
@@ -312,6 +320,15 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
     {
         print_err("[%d] <%s:%d> Error signal(SIGSEGV): %s\n", numProc, __func__, __LINE__, strerror(errno));
         exit(EXIT_FAILURE);
+    }
+
+    if ((numProc + 1) < conf->NumProc)
+    {
+        if (signal(SIGTERM, signal_handler_child) == SIG_ERR)
+        {
+            fprintf(stderr, "<%s:%d> Error signal(SIGTERM): %s\n", __func__, __LINE__, strerror(errno));
+            exit(EXIT_FAILURE);
+        }
     }
 
     if (signal(SIGUSR1, signal_handler_child) == SIG_ERR)
@@ -514,7 +531,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
     thrReqMan.join();
     EventHandler.join();
 
-    sleep(1);
+    sleep(1); // for valgrind (memory debugger)
     delete ReqMan;
 }
 //======================================================================

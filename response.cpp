@@ -162,14 +162,14 @@ int fastcgi(Connect* req, const char* uri)
     fcgi_list_addr* i = conf->fcgi_list;
     for (; i; i = i->next)
     {
-        if (i->scrpt_name[0] == '~')
+        if (i->script_name[0] == '~')
         {
-            if (!strcmp(p, i->scrpt_name.c_str() + 1))
+            if (!strcmp(p, i->script_name.c_str() + 1))
                 break;
         }
         else
         {
-            if (uri == i->scrpt_name)
+            if (uri == i->script_name)
                 break;
         }
     }
@@ -177,7 +177,7 @@ int fastcgi(Connect* req, const char* uri)
     if (!i)
         return -RS404;
     req->scriptType = fast_cgi;
-    req->scriptName = i->scrpt_name.c_str();
+    req->scriptName = i->script_name.c_str();
     int ret = fcgi(req);
     req->scriptName = NULL;
     return ret;

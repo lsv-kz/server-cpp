@@ -24,7 +24,7 @@ int get_sock_fcgi(Connect *req, const char *script)
     
     for (; ps; ps = ps->next)
     {
-        if (!strcmp(script, ps->scrpt_name.c_str()))
+        if (!strcmp(script, ps->script_name.c_str()))
             break;
     }
 

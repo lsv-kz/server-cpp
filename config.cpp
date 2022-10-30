@@ -253,7 +253,7 @@ void create_fcgi_list(fcgi_list_addr **l, const string &s1, const string &s2)
         exit(errno);
     }
 
-    t->scrpt_name = s1;
+    t->script_name = s1;
     t->addr = s2;
     t->next = *l;
     *l = t;
@@ -600,4 +600,9 @@ int set_max_fd(int max_open_fd)
     }
     //fprintf(stderr, "<%s:%d> max_open_fd=%d\n", __func__, __LINE__, max_open_fd);
     return max_open_fd;
+}
+//======================================================================
+void free_fcgi_list()
+{
+    c.free_fcgi_list();
 }

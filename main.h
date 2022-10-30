@@ -51,7 +51,7 @@
 #define     MAX_HEADERS         25
 
 typedef struct fcgi_list_addr {
-    std::string scrpt_name;
+    std::string script_name;
     std::string addr;
     struct fcgi_list_addr *next;
 } fcgi_list_addr;
@@ -146,6 +146,19 @@ struct Config
     }
 
     ~Config()
+    {
+        fcgi_list_addr *t;
+        while (fcgi_list)
+        {
+            t = fcgi_list;
+            fcgi_list = fcgi_list->next;
+            if (t)
+                delete t;
+        }
+        //std::cout << __func__ << " ******* " << getpid() << " *******\n";
+    }
+    
+    void free_fcgi_list()
     {
         fcgi_list_addr *t;
         while (fcgi_list)
