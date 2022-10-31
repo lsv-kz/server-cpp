@@ -437,8 +437,6 @@ mtx_.unlock();
 //======================================================================
 void push_pollin_list(Connect *req)
 {
-    if ((req->numConn == 1) && (req-> numReq == 2))
-        sleep(1);
     req->init();
     req->event = POLLIN;
     req->sock_timer = 0;
