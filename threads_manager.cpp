@@ -276,8 +276,9 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
     int pfd[2];
     int end_proc = 0;
 
-    if ((numProc + 1) < conf->NumProc)
+    if ((numProc + 1) < conf->NumProc)  // create next worker process
     {
+        // pipe for control of next process
         if (pipe(pfd) < 0)
         {
             fprintf(stderr, "<%s:%d> Error pipe(): %s\n", __func__, __LINE__, strerror(errno));
@@ -289,10 +290,10 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
         {
             fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
             exit(1);
-        }  // max open fd = 8
+        }  // min open fd = 8
     }
     else
-        end_proc = 1; // max open fd = 7
+        end_proc = 1; // This is last worker process (min open fd = 7)
     //------------------------------------------------------------------
     RequestManager *ReqMan = new(nothrow) RequestManager(numProc);
     if (!ReqMan)
@@ -402,33 +403,35 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
 
         if (status == CONNECT_IGN)
         {
-            num_fd = 1;
+            num_fd = 1;// poll(): only pipe[in]
 
-            if ((child_status == CONNECT_WAIT) && (end_proc == 0))
+            if ((child_status == CONNECT_ALLOW) && (end_proc == 0))
             {
-                print_err("[%d] <%s:%d> \"We are not here. It's not us.\"\n", numProc, __func__, __LINE__);
+                print_err("[%d] <%s:%d> \"We are not here. It is not us.\"\n", numProc, __func__, __LINE__);
                 child_status = PROC_CLOSE;
                 write(pfd[1], &child_status, sizeof(child_status));
                 break;
             }
         }
-        else if (status == CONNECT_WAIT)
+        else if (status == CONNECT_ALLOW)
         {
-            num_fd = 2;
+            num_fd = 2;// poll(): pipe[in] and listen socket
 
             if (is_maxconn())
-            {
+            {//------ the number of connections is the maximum ---------
                 if (end_proc == 0)
-                {
-                    child_status = CONNECT_WAIT;
+                { // Allow connections next worker process
+                    child_status = CONNECT_ALLOW;
                     if (write_to_pipe(pfd[1], &child_status, sizeof(child_status)) < 0)
                         break;
                 }
+                else // Blind alley
+                    print_err("[%d] <%s:%d> Blind alley\n", numProc, __func__, __LINE__);
 
-                check_num_conn();
+                check_num_conn(); // wait (num_conn < (MaxConnections - OverMaxConnections))
 
                 if (end_proc == 0)
-                {
+                { // Do not allow connections next process
                     child_status = CONNECT_IGN;
                     if (write_to_pipe(pfd[1], &child_status, sizeof(child_status)) < 0)
                         break;
@@ -460,7 +463,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
             {
                 print_err("[%d] <%s:%d> status=%d\n", numProc, __func__, __LINE__, status); 
                 if (end_proc == 0)
-                {
+                {// Close next process
                     child_status = PROC_CLOSE;
                     write(pfd[1], &child_status, sizeof(child_status));
                 }

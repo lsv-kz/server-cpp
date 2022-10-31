@@ -79,8 +79,13 @@ enum { EXIT_THR = 1 };
 const int NO_PRINT_LOG = -1000;
 
 void print_err(const char *format, ...);
-
-enum { CONNECT_IGN, CONNECT_WAIT, PROC_CLOSE };
+/* ---------------------------------------------------------------------
+ *                  Commands send to next process
+ * CONNECT_IGN    : The next process MUST NOT receive requests from the client
+ * CONNECT_ALLOW  : The next process MAY receive requests from client
+ * PROC_CLOSE     : Close next process
+ */
+enum { CONNECT_IGN, CONNECT_ALLOW, PROC_CLOSE };
 //----------------------------------------------------------------------
 struct Config
 {

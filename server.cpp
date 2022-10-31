@@ -28,7 +28,7 @@ static void signal_handler(int sig)
     {
         print_err("<main> ####### SIGINT #######\n");
         char status = PROC_CLOSE;
-        write(pfd[1], &status, sizeof(status));
+        write(pfd[1], &status, sizeof(status));// close first worker process
     }
     else if (sig == SIGTERM)
     {
@@ -45,14 +45,14 @@ static void signal_handler(int sig)
     {
         fprintf(stderr, "<%s> ####### SIGUSR1 #######\n", __func__);
         char status = PROC_CLOSE;
-        write(pfd[1], &status, sizeof(status));
+        write(pfd[1], &status, sizeof(status));// close first worker process
         restart = 1;
     }
     else if (sig == SIGUSR2)
     {
         fprintf(stderr, "<%s> ####### SIGUSR2 #######\n", __func__);
         char status = PROC_CLOSE;
-        write(pfd[1], &status, sizeof(status));
+        write(pfd[1], &status, sizeof(status));// close first worker process
     }
     else
     {
@@ -62,6 +62,7 @@ static void signal_handler(int sig)
 //======================================================================
 void create_proc(int NumProc)
 {
+    // pipe for control first process
     if (pipe(pfd) < 0)
     {
         fprintf(stderr, "<%s:%d> Error pipe(): %s\n", __func__, __LINE__, strerror(errno));
@@ -335,9 +336,10 @@ int main_proc()
         }
     }
     //------------------------------------------------------------------
-    create_proc(conf->NumProc);
+    create_proc(conf->NumProc);  // create first worker process
     //------------------------------------------------------------------
-    char status = CONNECT_WAIT;
+    //---------- Allow  connections first worker process ---------------
+    char status = CONNECT_ALLOW;
     int ret;
     if ((ret = write(pfd[1], &status, sizeof(status))) < 0)
     {
@@ -347,7 +349,7 @@ int main_proc()
         close(sockServer);
         return 1;
     }
-
+    //------------------------------------------------------------------
     close(sockServer);
     free_fcgi_list();
 

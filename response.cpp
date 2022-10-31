@@ -22,7 +22,6 @@ void response1(RequestManager *ReqMan)
             return;
         }
         //--------------------------------------------------------------
-        get_time(req->sLogTime);
         int ret = parse_startline_request(req, req->reqHdName[0]);
         if (ret)
         {

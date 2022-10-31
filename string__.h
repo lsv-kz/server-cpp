@@ -122,7 +122,7 @@ class String
         s[i] = 0;
         if ((ind_ < len) && (!is_space(buf[ind_])))
         {
-    fprintf(stderr, "<%s:%d> \"We are not here. It's not us.\"\n", __func__, __LINE__);
+    fprintf(stderr, "<%s:%d> \"We are not here. It is not us.\"\n", __func__, __LINE__);
     //std::cerr << "<" << __LINE__ << "> ind=" << ind_ << ", len=" << len << ", isspace=" << is_space(buf[ind_])
     //    << " ch=" << std::hex << (int)buf[ind_] << std::dec << ", max_len=" << max_len << "\n";
             return (err = 4);
