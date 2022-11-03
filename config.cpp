@@ -458,6 +458,7 @@ int read_conf_file(FILE *fconf)
         return -1;
     }
     //------------------------------------------------------------------
+    //------------------- Setting OPEN_MAX -----------------------------
     if (c.MaxWorkConnections <= 0)
     {
         fprintf(stderr, "<%s:%d> Error config file: MaxWorkConnections=%d\n", __func__, __LINE__, c.MaxWorkConnections);

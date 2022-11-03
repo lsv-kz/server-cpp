@@ -12,7 +12,6 @@ int isimage(const char *name)
 
     if(!strlcmp_case(p, ".gif", 4)) return 1;
     else if(!strlcmp_case(p, ".png", 4)) return 1;
-    else if(!strlcmp_case(p, ".ico", 4)) return 1;
     else if(!strlcmp_case(p, ".svg", 4)) return 1;
     else if(!strlcmp_case(p, ".jpeg", 5) || !strlcmp_case(p, ".jpg", 4)) return 1;
     return 0;
@@ -64,7 +63,7 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
         chunk = ((req->httpProt == HTTP11) && req->connKeepAlive) ? SEND_CHUNK : SEND_NO_CHUNK;
 
     ClChunked chunk_buf(req, chunk);
-//print_err(req, "<%s:%d> ---------------\n", __func__, __LINE__);
+
     req->respStatus = RS200;
     String hdrs(64);
     if (hdrs.error())
@@ -143,7 +142,7 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
         }
     }
     //------------------------------------------------------------------
-    chunk_buf << "   <tr><td><hr></td><td><hr></td></tr>\r\n"
+    chunk_buf << "  </table>\r\n   <hr>\r\n  <table cols=\"2\" width=\"100\%\">\r\n"
                 "   <tr><td><h3>Files</h3></td><td></td></tr>\r\n";
     if (chunk_buf.error())
     {
@@ -159,6 +158,8 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
         path.resize(len_path);
         if ((n == -1) || !S_ISREG (st.st_mode))
             continue;
+        else if (!strcmp(list[i], "favicon.ico"))
+            continue;
 
         if (!encode(list[i], buf, sizeof(buf)))
         {
@@ -171,18 +172,18 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
         if(isimage(list[i]) && (conf->ShowMediaFiles == 'y'))
         {
             if(size < 15000LL)
-                chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\"></a><br>"
-                        << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n   <tr><td></td><td></td></tr>\r\n";
+                chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\"></a></td><td align=\"left\">"
+                          << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
             else
-                chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"300\"></a><br>"
-                        << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n   <tr><td></td><td></td></tr>\r\n";
+                chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"300\"></a></td><td align=\"left\">"
+                          << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
         }
         else if(isaudiofile(list[i]) && (conf->ShowMediaFiles == 'y'))
-            chunk_buf << "   <tr><td><audio preload=\"auto\" controls src=\"" << buf << "\"></audio><a href=\""
-                    << buf << "\">" << list[i] << "</a></td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
+            chunk_buf << "   <tr><td><audio preload=\"none\" controls src=\"" << buf << "\"></audio><a href=\""
+                      << buf << "\"></td><td>" << list[i] << "</a></td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
         else
-            chunk_buf << "   <tr><td><a href=\"" << buf << "\">" << list[i] << "</a></td><td align=\"right\">" 
-                    << size << " bytes</td></tr>\r\n";
+            chunk_buf << "   <tr><td><a href=\"" << buf << "\">" << list[i] << "</a></td><td></td><td align=\"right\">" 
+                      << size << " bytes</td></tr>\r\n";
         
         if (chunk_buf.error())
         {
@@ -238,9 +239,6 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
 //======================================================================
 int index_dir(Connect *req, String& path)
 {
-    if (req->reqMethod == M_POST)
-        return -RS405; // 403
-    
     DIR *dir;
     struct dirent *dirbuf;
     int maxNumFiles = 1024, numFiles = 0;
@@ -271,6 +269,7 @@ int index_dir(Connect *req, String& path)
         
         if (dirbuf->d_name[0] == '.')
             continue;
+
         list[numFiles] = dirbuf->d_name;
         ++numFiles;
     }

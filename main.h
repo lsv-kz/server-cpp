@@ -17,8 +17,9 @@
 
 #include <errno.h>
 #include <signal.h>
-#include <unistd.h>
+#include <stdarg.h>
 
+#include <unistd.h>
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/wait.h>
@@ -326,6 +327,7 @@ int send_response_headers(Connect *req, const String *hdrs);
 std::string get_time();
 void get_time(std::string& s);
 std::string log_time();
+
 const char *strstr_case(const char * s1, const char *s2);
 int strlcmp_case(const char *s1, const char *s2, int len);
 

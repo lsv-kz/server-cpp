@@ -1,12 +1,11 @@
 #include "main.h"
-#include <stdarg.h>
 
 using namespace std;
 
 int flog = STDOUT_FILENO, flog_err = STDERR_FILENO;
 mutex mtxLog;
 //======================================================================
-void create_logfiles(const string &log_dir)
+void create_logfiles(const string& log_dir)
 {
     char buf[256];
     struct tm tm1;
@@ -27,7 +26,7 @@ void create_logfiles(const string &log_dir)
     }
     //------------------------------------------------------------------
     fileName.clear();
-    fileName << log_dir << "/" << "error_" << buf << '_' << conf->ServerSoftware << ".log";
+    fileName << log_dir << "/error_" << buf << '_' << conf->ServerSoftware << ".log";
     
     flog_err = open(fileName.c_str(), O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); //  O_APPEND 
     if(flog_err == -1)
@@ -48,7 +47,7 @@ void close_logs(void)
 void print_err(const char *format, ...)
 {
     va_list ap;
-    char buf[128];
+    char buf[300];
 
     va_start(ap, format);
     vsnprintf(buf, sizeof(buf), format, ap);
@@ -63,7 +62,7 @@ mtxLog.unlock();
 void print_err(Connect *req, const char *format, ...)
 {
     va_list ap;
-    char buf[128];
+    char buf[300];
 
     va_start(ap, format);
     vsnprintf(buf, sizeof(buf), format, ap);
@@ -84,7 +83,8 @@ void print_log(Connect *req)
     {
         ss  << req->numProc << "/" << req->numConn << "/" << req->numReq << " - " << req->remoteAddr
             << " - [" << log_time() << "] - \"-\" "
-            << req->respStatus << " " << req->send_bytes << " \"-\" \"-\"\n";
+            << req->respStatus << " " << req->send_bytes 
+            << " \"" << ((req->req_hd.iReferer >= 0) ? req->reqHdValue[req->req_hd.iReferer] : "-") << "\" \"-\"\n";
     }
     else
     {

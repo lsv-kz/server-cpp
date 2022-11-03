@@ -42,7 +42,11 @@ int Connect::hd_read()
         return -RS414;
     int n = recv(clientSocket, bufReq + lenBufReq, len, 0);
     if (n < 0)
+    {
+        if (errno == EAGAIN)
+            return -EAGAIN;
         return -1;
+    }
     else if (n == 0)
         return NO_PRINT_LOG;
 

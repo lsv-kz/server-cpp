@@ -338,7 +338,7 @@ int main_proc()
     //------------------------------------------------------------------
     create_proc(conf->NumProc);  // create first worker process
     //------------------------------------------------------------------
-    //---------- Allow  connections first worker process ---------------
+    //---------- Allow connections first worker process ---------------
     char status = CONNECT_ALLOW;
     int ret;
     if ((ret = write(pfd[1], &status, sizeof(status))) < 0)
@@ -388,7 +388,7 @@ pid_t create_child(int sock, unsigned int num_chld, int *pfd, int close_fd)
                 fprintf(stderr, "<%s:%d> Error setgid(%u): %s\n", __func__, __LINE__, conf->server_gid, strerror(errno));
                 exit(1);
             }
-            
+
             if (setuid(conf->server_gid) == -1)
             {
                 fprintf(stderr, "<%s:%d> Error setuid(%u): %s\n", __func__, __LINE__, conf->server_gid, strerror(errno));

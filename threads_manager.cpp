@@ -535,7 +535,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
     thrReqMan.join();
     EventHandler.join();
 
-    sleep(1); // for valgrind (memory debugger)
+    usleep(1000); // for valgrind (memory debugger)
     delete ReqMan;
 }
 //======================================================================

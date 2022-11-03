@@ -15,6 +15,10 @@ using namespace std;
 //                                  |                                        //
 //                                  V                                        //
 // push_conn() -> [wait_list] -> [tmp_list] -> [work_list] -> end_response() //
+//                                                                           //
+// [wait_list] - storage for connections waiting first request               //
+// [work_list] - storage for working connections                             //
+// [tmp_list] - temporary storage                                            //
 //=============================================================================
 static Connect *wait_list_start = NULL;
 static Connect *wait_list_end = NULL;
@@ -134,7 +138,7 @@ static void del_from_list(Connect *r)
         close(r->fd);
     else
         get_time(r->sLogTime);
-    
+
     if (r->prev && r->next)
     {
         r->prev->next = r->next;
@@ -340,7 +344,7 @@ void event_handler(RequestManager *ReqMan)
     {
         {
     unique_lock<mutex> lk(mtx_);
-            while ((!work_list_start) && (!tmp_list_start) && (!wait_list_end) && (!close_thr))
+            while ((!work_list_start) && (!tmp_list_start) && (!wait_list_start) && (!close_thr))
             {
                 cond_.wait(lk);
             }
@@ -357,13 +361,8 @@ void event_handler(RequestManager *ReqMan)
                     if (wait_list_start == wait_list_end)
                         wait_list_end = wait_list_start = NULL;
                     else
-                    {
                         wait_list_start = wait_list_start->next;
-                    }
 
-                    r->init();
-                    r->event = POLLIN;
-                    r->sock_timer = 0;
                     r->next = NULL;
                     r->prev = tmp_list_end;
                     if (tmp_list_start)
@@ -456,11 +455,14 @@ mtx_.unlock();
 //======================================================================
 void push_conn(Connect *req)
 {
-mtx_.lock();
+    req->init();
+    req->event = POLLIN;
+    req->sock_timer = 0;
     req->next = NULL;
+mtx_.lock();
+    req->prev = wait_list_end;
     if (wait_list_start)
     {
-        req->prev = wait_list_end;
         wait_list_end->next = req;
         wait_list_end = req;
     }

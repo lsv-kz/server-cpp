@@ -262,6 +262,9 @@ int response2(Connect *req)
     //------------------------------------------------------------------
     if (S_ISDIR(st.st_mode))
     {
+        if (req->reqMethod == M_POST)
+            return -RS404;
+
         if (req->uri[req->uriLen - 1] != '/')
         {
             req->uri[req->uriLen] = '/';
@@ -352,9 +355,6 @@ int response2(Connect *req)
             }
         }
     }
-    
-    if (req->reqMethod == M_POST)
-        return -RS405;
     //--------------------- send file ----------------------------------
     req->fileSize = file_size(path.c_str());
     req->numPart = 0;
