@@ -27,8 +27,8 @@ void create_logfiles(const string& log_dir)
     //------------------------------------------------------------------
     fileName.clear();
     fileName << log_dir << "/error_" << buf << '_' << conf->ServerSoftware << ".log";
-    
-    flog_err = open(fileName.c_str(), O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH); //  O_APPEND 
+
+    flog_err = open(fileName.c_str(), O_CREAT | O_TRUNC | O_WRONLY, S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH);
     if(flog_err == -1)
     {
         cerr << "  Error create log_err: " << fileName.c_str() << "\n";
@@ -67,10 +67,10 @@ void print_err(Connect *req, const char *format, ...)
     va_start(ap, format);
     vsnprintf(buf, sizeof(buf), format, ap);
     va_end(ap);
-    
+
     String ss(256);
     ss << "[" << log_time() << "]-[" << req->numProc << "/" << req->numConn << "/" << req->numReq << "] " << buf;
-    
+
 mtxLog.lock();
     write(flog_err, ss.c_str(), ss.size());
 mtxLog.unlock();

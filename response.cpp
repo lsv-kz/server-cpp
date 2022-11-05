@@ -28,7 +28,7 @@ void response1(RequestManager *ReqMan)
             print_err(req, "<%s:%d>  Error parse_startline_request(): %d\n", __func__, __LINE__, ret);
             goto end;
         }
-     
+
         for (int i = 1; i < req->countReqHeaders; ++i)
         {
             ret = parse_headers(req, req->reqHdName[i], i);
@@ -80,7 +80,7 @@ void response1(RequestManager *ReqMan)
             req->err = -RS404;
             goto end;
         }
-        
+
         clean_path(req->decodeUri);
         req->lenDecodeUri = strlen(req->decodeUri);
 
@@ -110,7 +110,7 @@ void response1(RequestManager *ReqMan)
                 else
                     continue;
             }
-            
+
             req->err = ret;
         }
         else if (req->reqMethod == M_OPTIONS)
@@ -128,7 +128,7 @@ void response1(RequestManager *ReqMan)
         }
 
         end_response(req);
-        
+
         ret = ReqMan->end_thr(0);
         if (ret)
         {
@@ -157,7 +157,7 @@ int fastcgi(Connect* req, const char* uri)
     const char* p = strrchr(uri, '/');
     if (!p)
         return -RS404;
-    
+
     fcgi_list_addr* i = conf->fcgi_list;
     for (; i; i = i->next)
     {
@@ -194,14 +194,14 @@ int response2(Connect *req)
             print_err(req, "<%s:%d> Not found: %s\n", __func__, __LINE__, req->decodeUri);
             return -RS404;
         }
-        
+
         struct stat st;
         if (stat(req->decodeUri + 1, &st) == -1)
         {
             print_err(req, "<%s:%d> script (%s) not found\n", __func__, __LINE__, req->decodeUri);
             return -RS404;
         }
-        
+
         req->scriptName = req->decodeUri;
 
         if (conf->UsePHP == "php-fpm")
@@ -220,9 +220,8 @@ int response2(Connect *req)
         req->scriptName = NULL;
         return ret;
     }
-    
-    if (!strncmp(req->decodeUri, "/cgi-bin/", 9) 
-        || !strncmp(req->decodeUri, "/cgi/", 5))
+
+    if (!strncmp(req->decodeUri, "/cgi-bin/", 9) || !strncmp(req->decodeUri, "/cgi/", 5))
     {
         int ret;
         req->scriptType = cgi_ex;
@@ -231,24 +230,20 @@ int response2(Connect *req)
         return ret;
     }
     //------------------------------------------------------------------
-    String path;
-//  path.reserve(req->conf->rootDir.size() + req->lenDecodeUri + 256);
-//  path = req->conf->rootDir;
-    
+    string path;
+//  path.reserve(req->conf->DocumentRoot.size() + req->lenDecodeUri + 256);
+//  path = req->conf->DocumentRoot;
+
     path.reserve(1 + req->lenDecodeUri + 16);
-    path << '.';
-    
-    path << req->decodeUri;
+    path += '.';
+    path += req->decodeUri;
     if (path[path.size()-1] == '/')
         path.resize(path.size() - 1);
 
     if (lstat(path.c_str(), &st) == -1)
     {
         if (errno == EACCES)
-        {
-            print_err(req, "<%s:%d> Error lstat(\"%s\"): %s\n", __func__, __LINE__, path.c_str(), strerror(errno));
             return -RS403;
-        }
         return fastcgi(req, req->decodeUri);
     }
     else
@@ -270,7 +265,7 @@ int response2(Connect *req)
             req->uri[req->uriLen] = '/';
             req->uri[req->uriLen + 1] = '\0';
             req->respStatus = RS301;
-            
+
             String hdrs(127);
             hdrs << "Location: " << req->uri << "\r\n";
             if (hdrs.error())
@@ -278,7 +273,7 @@ int response2(Connect *req)
                 print_err(req, "<%s:%d> Error\n", __func__, __LINE__);
                 return -RS500;
             }
-            
+
             String s(256);
             s << "The document has moved <a href=\"" << req->uri << "\">here</a>.";
             if (s.error())
@@ -292,7 +287,7 @@ int response2(Connect *req)
         }
         //--------------------------------------------------------------
         int len = path.size();
-        path << "/index.html";
+        path += "/index.html";
         if ((stat(path.c_str(), &st) != 0) || (conf->index_html != 'y'))
         {
             errno = 0;
@@ -301,13 +296,13 @@ int response2(Connect *req)
             int ret;
             if ((conf->UsePHP != "n") && (conf->index_php == 'y'))
             {
-                path << "/index.php";
+                path += "/index.php";
                 if (!stat(path.c_str(), &st))
                 {
-                    String s;
-                    s << req->decodeUri << "index.php";
+                    string s = req->decodeUri;
+                    s += "index.php";
                     req->scriptName = s.c_str();
-                    
+
                     if (conf->UsePHP == "php-fpm")
                     {
                         req->scriptType = php_fpm;
@@ -320,13 +315,13 @@ int response2(Connect *req)
                     }
                     else
                         ret = -1;
-                    
+
                     req->scriptName = NULL;
                     return ret;
                 }
                 path.resize(len);
             }
-            
+
             if (conf->index_pl == 'y')
             {
                 req->scriptType = cgi_ex;
@@ -350,9 +345,7 @@ int response2(Connect *req)
             if (conf->AutoIndex == 'y')
                 return index_dir(req, path);
             else
-            {
                 return -RS403;
-            }
         }
     }
     //--------------------- send file ----------------------------------
@@ -377,7 +370,7 @@ int response2(Connect *req)
     int ret = send_file(req);
     if (ret != 1)
         close(req->fd);
-    
+
     return ret;
 }
 //======================================================================
@@ -386,14 +379,14 @@ int send_file(Connect *req)
     if (req->req_hd.iRange >= 0)
     {
         int err;
-        
+
         ArrayRanges rg(req->sRange, req->fileSize);
         if ((err = rg.error()))
         {
             print_err(req, "<%s:%d> Error create_ranges\n", __func__, __LINE__);
             return err;
         }
-        
+
         req->numPart = rg.size();
         req->respStatus = RS206;
         if (req->numPart > 1)
@@ -429,7 +422,7 @@ int send_file(Connect *req)
         }
         else
         {
-            print_err(req, "<%s:%d> ????????????????????????\n", __func__, __LINE__);
+            print_err(req, "<%s:%d> ???\n", __func__, __LINE__);
             exit(1);
             return -RS416;
         }
@@ -446,10 +439,9 @@ int send_file(Connect *req)
             return 0;
         }
     }
-    
+
     if (send_response_headers(req, NULL))
         return -1;
-    
     push_pollout_list(req);
 
     return 1;
@@ -461,7 +453,7 @@ int send_multypart(Connect *req, ArrayRanges& rg, char *rd_buf, int size)
     long long send_all_bytes = 0;
     char buf[1024];
     Range *range;
-    
+
     for (int i = 0; (range = rg.get(i)) && (i < req->numPart); ++i)
     {
         send_all_bytes += (range->len);
@@ -478,14 +470,14 @@ int send_multypart(Connect *req, ArrayRanges& rg, char *rd_buf, int size)
         print_err(req, "<%s:%d> Error create response headers\n", __func__, __LINE__);
         return -1;
     }
-    
+
     if (send_response_headers(req, &hdrs))
         return -1;
     if (req->reqMethod == M_HEAD)
         return 0;
-    
+
     send_all_bytes = 0;
-    
+
     for (int i = 0; (range = rg.get(i)) && (i < req->numPart); ++i)
     {
         if ((n = create_multipart_head(req, range, buf, sizeof(buf))) == 0)
@@ -500,7 +492,7 @@ int send_multypart(Connect *req, ArrayRanges& rg, char *rd_buf, int size)
             print_err(req, "<%s:%d> Error: write_timeout(), %lld bytes\n", __func__, __LINE__, send_all_bytes);
             return -1;
         }
-        
+
         send_all_bytes += n;
         send_all_bytes += range->len;
 
@@ -526,7 +518,7 @@ int send_multypart(Connect *req, ArrayRanges& rg, char *rd_buf, int size)
 int create_multipart_head(Connect *req, struct Range *ranges, char *buf, int len_buf)
 {
     int n, all = 0;
-    
+
     n = snprintf(buf, len_buf, "\r\n--%s\r\n", boundary);
     buf += n;
     len_buf -= n;
@@ -541,7 +533,7 @@ int create_multipart_head(Connect *req, struct Range *ranges, char *buf, int len
     }
     else
         return 0;
-    
+
     if (len_buf > 0)
     {
         n = snprintf(buf, len_buf,

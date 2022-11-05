@@ -6,14 +6,17 @@ int isimage(const char *name)
 {
     const char *p;
 
-    p = strrchr(name, '.');
-    if(!p)
+    if (!(p = strrchr(name, '.')))
         return 0;
 
-    if(!strlcmp_case(p, ".gif", 4)) return 1;
-    else if(!strlcmp_case(p, ".png", 4)) return 1;
-    else if(!strlcmp_case(p, ".svg", 4)) return 1;
-    else if(!strlcmp_case(p, ".jpeg", 5) || !strlcmp_case(p, ".jpg", 4)) return 1;
+    if (!strlcmp_case(p, ".gif", 4))
+        return 1;
+    else if (!strlcmp_case(p, ".png", 4))
+        return 1;
+    else if (!strlcmp_case(p, ".svg", 4))
+        return 1;
+    else if (!strlcmp_case(p, ".jpeg", 5) || !strlcmp_case(p, ".jpg", 4))
+        return 1;
     return 0;
 }
 //======================================================================
@@ -21,11 +24,15 @@ int isaudiofile(const char *name)
 {
     const char *p;
 
-    if(!(p = strrchr(name, '.'))) return 0;
+    if (!(p = strrchr(name, '.')))
+        return 0;
 
-    if(!strlcmp_case(p, ".wav", 4)) return 1;
-    else if(!strlcmp_case(p, ".mp3", 4)) return 1;
-    else if(!strlcmp_case(p, ".ogg", 4)) return 1;
+    if (!strlcmp_case(p, ".wav", 4))
+        return 1;
+    else if (!strlcmp_case(p, ".mp3", 4))
+        return 1;
+    else if (!strlcmp_case(p, ".ogg", 4))
+        return 1;
     return 0;
 }
 //======================================================================
@@ -34,23 +41,27 @@ int cmp(const void *a, const void *b)
     unsigned int n1, n2;
     int i;
 
-    if((n1 = atoi(*(char **)a)) > 0)
+    if ((n1 = atoi(*(char **)a)) > 0)
     {
-        if((n2 = atoi(*(char **)b)) > 0)
+        if ((n2 = atoi(*(char **)b)) > 0)
         {
-            if(n1 < n2) i = -1;
-            else if(n1 == n2)
+            if (n1 < n2)
+                i = -1;
+            else if (n1 == n2)
                 i = strcmp(*(char **)a, *(char **)b);
-            else i = 1;
+            else
+                i = 1;
         }
-        else i = strcmp(*(char **)a, *(char **)b);
+        else
+            i = strcmp(*(char **)a, *(char **)b);
     }
-    else i = strcmp(*(char **)a, *(char **)b);
+    else
+        i = strcmp(*(char **)a, *(char **)b);
 
     return i;
 }
 //======================================================================
-int index_chunked(Connect *req, char **list, int numFiles, String& path)
+int index_chunked(Connect *req, char **list, int numFiles, string& path)
 {
     const int len_path = path.size();
     int n, i;
@@ -66,11 +77,7 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
 
     req->respStatus = RS200;
     String hdrs(64);
-    if (hdrs.error())
-    {
-        print_err(req, "<%s:%d> Error create String object\n", __func__, __LINE__);
-        return -RS500;
-    }
+
     if (chunk == SEND_CHUNK)
     {
         hdrs << "Transfer-Encoding: chunked\r\n";
@@ -109,7 +116,7 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
         return -1;
     }
     //------------------------------------------------------------------
-    if(!strcmp(req->decodeUri, "/"))
+    if (!strcmp(req->decodeUri, "/"))
         chunk_buf << "   <tr><td></td><td></td></tr>\r\n";
     else
         chunk_buf << "   <tr><td><a href=\"../\">Parent Directory/</a></td><td></td></tr>\r\n";
@@ -122,7 +129,7 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
     for (i = 0; (i < numFiles); i++)
     {
         char buf[1024];
-        path << list[i];
+        path += list[i];
         n = lstat(path.c_str(), &st);
         path.resize(len_path);
         if ((n == -1) || !S_ISDIR (st.st_mode))
@@ -153,7 +160,7 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
     for (i = 0; i < numFiles; i++)
     {
         char buf[1024];
-        path << list[i];
+        path += list[i];
         n = lstat(path.c_str(), &st);
         path.resize(len_path);
         if ((n == -1) || !S_ISREG (st.st_mode))
@@ -169,16 +176,16 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
 
         size = (long long)st.st_size;
 
-        if(isimage(list[i]) && (conf->ShowMediaFiles == 'y'))
+        if (isimage(list[i]) && (conf->ShowMediaFiles == 'y'))
         {
-            if(size < 15000LL)
+            if (size < 15000LL)
                 chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\"></a></td><td align=\"left\">"
                           << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
             else
                 chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"300\"></a></td><td align=\"left\">"
                           << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
         }
-        else if(isaudiofile(list[i]) && (conf->ShowMediaFiles == 'y'))
+        else if (isaudiofile(list[i]) && (conf->ShowMediaFiles == 'y'))
             chunk_buf << "   <tr><td><audio preload=\"none\" controls src=\"" << buf << "\"></audio><a href=\""
                       << buf << "\"></td><td>" << list[i] << "</a></td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
         else
@@ -237,7 +244,7 @@ int index_chunked(Connect *req, char **list, int numFiles, String& path)
     return 0;
 }
 //======================================================================
-int index_dir(Connect *req, String& path)
+int index_dir(Connect *req, string& path)
 {
     DIR *dir;
     struct dirent *dirbuf;
@@ -245,12 +252,12 @@ int index_dir(Connect *req, String& path)
     char *list[maxNumFiles];
     int ret;
 
-    path << '/';
+    path += '/';
     
     dir = opendir(path.c_str());
     if (dir == NULL)
     {
-        if(errno == EACCES)
+        if (errno == EACCES)
             return -RS403;
         else
         {
@@ -261,7 +268,7 @@ int index_dir(Connect *req, String& path)
     
     while ((dirbuf = readdir(dir)))
     {        
-        if(numFiles >= maxNumFiles )
+        if (numFiles >= maxNumFiles )
         {
             print_err(req, "<%s:%d> number of files per directory >= %d\n", __func__, __LINE__, numFiles);
             break;
@@ -269,7 +276,6 @@ int index_dir(Connect *req, String& path)
         
         if (dirbuf->d_name[0] == '.')
             continue;
-
         list[numFiles] = dirbuf->d_name;
         ++numFiles;
     }

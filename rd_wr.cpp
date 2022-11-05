@@ -266,18 +266,14 @@ int script_to_file(int fd_in, int fd_out, int cont_len, int timeout)
             return -1;
         }
         else if (rd == 0)
-        {
             break;
-        }
-        
+
         cont_len -= rd;
 
         wr = write(fd_out, buf, rd);
         if (wr != rd)
-        {
             return -1;
-        }
-        
+
         all_wr_bytes += rd;
     }
 

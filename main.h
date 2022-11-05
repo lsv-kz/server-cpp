@@ -236,15 +236,15 @@ public:
     char  *reqHdName[MAX_HEADERS + 1];
     const char  *reqHdValue[MAX_HEADERS + 1];
     //--------------------------------------
-    std::string    sLogTime;
-    int       respStatus;
-    int       scriptType;
+    std::string sLogTime;
+    int respStatus;
+    int scriptType;
     const char *scriptName;
-    int       numPart;
+    int numPart;
     long long respContentLength;
     const char *respContentType;
     long long fileSize;
-    int       fd;
+    int fd;
     off_t offset;
     long long send_bytes;
 
@@ -294,12 +294,12 @@ extern char **environ;
 void response1(RequestManager *ReqMan);
 int response2(Connect *req);
 int options(Connect *req);
-int index_dir(Connect *req, String& path);
+int index_dir(Connect *req, std::string& path);
 int cgi(Connect *req);
 int fcgi(Connect *req);
 int create_fcgi_socket(const char *host);
 
-pid_t create_child(int sock, unsigned int num_chld, int *pfd, int);
+pid_t create_child(int sock, unsigned int num_chld, int*, int);
 //----------------------------------------------------------------------
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);
@@ -331,10 +331,10 @@ std::string log_time();
 const char *strstr_case(const char * s1, const char *s2);
 int strlcmp_case(const char *s1, const char *s2, int len);
 
-int get_int_method(char *s);
+int get_int_method(const char *s);
 const char *get_str_method(int i);
 
-int get_int_http_prot(char *s);
+int get_int_http_prot(const char *s);
 const char *get_str_http_prot(int i);
 
 int clean_path(char *path);

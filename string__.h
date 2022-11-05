@@ -122,9 +122,7 @@ class String
         s[i] = 0;
         if ((ind_ < len) && (!is_space(buf[ind_])))
         {
-    fprintf(stderr, "<%s:%d> \"We are not here. It is not us.\"\n", __func__, __LINE__);
-    //std::cerr << "<" << __LINE__ << "> ind=" << ind_ << ", len=" << len << ", isspace=" << is_space(buf[ind_])
-    //    << " ch=" << std::hex << (int)buf[ind_] << std::dec << ", max_len=" << max_len << "\n";
+            fprintf(stderr, "<%s:%d> \"We are not here. It is not us.\"\n", __func__, __LINE__);
             return (err = 4);
         }
 
@@ -197,30 +195,6 @@ public:
     {
         ind_ = 0;
         append(t);
-        return *this;
-    }
-    //------------------------------------------------------------------
-    String& operator << (String& s)
-    {
-        buf += s.buf;
-        return *this;
-    }
-    //------------------------------------------------------------------
-    String& operator << (std::string& s)
-    {
-        buf += s;
-        return *this;
-    }
-    //------------------------------------------------------------------
-    String& operator << (const char *s)
-    {
-        append(s);
-        return *this;
-    }
-    //------------------------------------------------------------------
-    String& operator << (char *s)
-    {
-        append(s);
         return *this;
     }
     //------------------------------------------------------------------

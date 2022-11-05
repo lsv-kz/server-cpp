@@ -20,16 +20,18 @@ void Connect::init()
 
     req_hd = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1LL};
 
-    fd = -1;
     respStatus = 0;
-    respContentType = NULL;
 
-    send_bytes = 0LL;
-    numPart = 0;
+    scriptType = 0;
     scriptName = NULL;
 
-    offset = 0;
+    numPart = 0;
     respContentLength = -1LL;
+    respContentType = NULL;
+    fileSize = 0;
+    fd = -1;
+    offset = 0;
+    send_bytes = 0LL;
 }
 //----------------------------------------------------------------------
 int Connect::hd_read()
@@ -232,7 +234,7 @@ void ArrayRanges::parse_ranges(char *sRange)
     char *p2;
 
     p1 = p2 = sRange;
-    
+
     for ( ; nRanges < SizeArray; )
     {
         if (err) return;
@@ -250,7 +252,7 @@ void ArrayRanges::parse_ranges(char *sRange)
                     err = RS416;
                     return;
                 }
-                            
+
                 i++;
                 p1 = p2;
             }
@@ -295,7 +297,7 @@ void ArrayRanges::parse_ranges(char *sRange)
                 err = RS416;
                 return;
             }
-            
+
             if (end >= size)
                 end = size - 1;
             
@@ -329,7 +331,7 @@ ArrayRanges::ArrayRanges(char *s, long long sz)
         err = RS500;
         return;
     }
-    
+
     if (conf->MaxRanges == 0)
     {
         err = RS403;
@@ -341,9 +343,9 @@ ArrayRanges::ArrayRanges(char *s, long long sz)
         if (*p == ',')
             SizeArray++;
     }
-    
+
     SizeArray++;
-    
+
     if (SizeArray > conf->MaxRanges)
         SizeArray = conf->MaxRanges;
     reserve();

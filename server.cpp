@@ -16,7 +16,7 @@ static int main_proc();
 static string pidFile;
 static string conf_path;
 
-static int pfd[2];
+static int pfd_out;
 
 static int start = 0, restart = 1;
 
@@ -28,7 +28,7 @@ static void signal_handler(int sig)
     {
         print_err("<main> ####### SIGINT #######\n");
         char status = PROC_CLOSE;
-        write(pfd[1], &status, sizeof(status));// close first worker process
+        write(pfd_out, &status, sizeof(status));// close first worker process
     }
     else if (sig == SIGTERM)
     {
@@ -45,14 +45,14 @@ static void signal_handler(int sig)
     {
         fprintf(stderr, "<%s> ####### SIGUSR1 #######\n", __func__);
         char status = PROC_CLOSE;
-        write(pfd[1], &status, sizeof(status));// close first worker process
+        write(pfd_out, &status, sizeof(status));// close first worker process
         restart = 1;
     }
     else if (sig == SIGUSR2)
     {
         fprintf(stderr, "<%s> ####### SIGUSR2 #######\n", __func__);
         char status = PROC_CLOSE;
-        write(pfd[1], &status, sizeof(status));// close first worker process
+        write(pfd_out, &status, sizeof(status));// close first worker process
     }
     else
     {
@@ -62,14 +62,7 @@ static void signal_handler(int sig)
 //======================================================================
 void create_proc(int NumProc)
 {
-    // pipe for control first process
-    if (pipe(pfd) < 0)
-    {
-        fprintf(stderr, "<%s:%d> Error pipe(): %s\n", __func__, __LINE__, strerror(errno));
-        exit(1);
-    }
-
-    pid_child = create_child(sockServer, 0, pfd, -1);
+    pid_child = create_child(sockServer, 0, &pfd_out, -1);
     if (pid_child < 0)
     {
         fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
@@ -113,7 +106,6 @@ void print_config()
          << "\n\n   OverMaxConnections   : " << conf->OverMaxConnections
          << "\n   MaxWorkConnections   : " << conf->MaxWorkConnections
          << "\n   MaxConnections       : " << conf->MaxConnections
-
          << "\n\n   MaxEventConnections  : " << conf->MaxEventConnections
 
          << "\n\n   NumProc              : " << conf->NumProc
@@ -341,10 +333,10 @@ int main_proc()
     //---------- Allow connections first worker process ---------------
     char status = CONNECT_ALLOW;
     int ret;
-    if ((ret = write(pfd[1], &status, sizeof(status))) < 0)
+    if ((ret = write(pfd_out, &status, sizeof(status))) < 0)
     {
         print_err("<%s:%d> Error write(): %s\n", __func__, __LINE__, strerror(errno));
-        close(pfd[1]);
+        close(pfd_out);
         shutdown(sockServer, SHUT_RDWR);
         close(sockServer);
         return 1;
@@ -359,7 +351,7 @@ int main_proc()
     }
 
     shutdown(sockServer, SHUT_RDWR);
-    close(pfd[1]);
+    close(pfd_out);
 
     if (restart == 0)
         fprintf(stderr, "<%s> ***** Close *****\n", __func__);
@@ -371,9 +363,16 @@ int main_proc()
 //======================================================================
 void manager(int sock, unsigned int num, int fd_in);
 //======================================================================
-pid_t create_child(int sock, unsigned int num_chld, int *pfd, int close_fd)
+pid_t create_child(int sock, unsigned int num_chld, int *pfd_o, int close_fd)
 {
     pid_t pid;
+    int pfd[2];
+
+    if (pipe(pfd) < 0)
+    {
+        fprintf(stderr, "<%s:%d> Error pipe(): %s\n", __func__, __LINE__, strerror(errno));
+        return -1;
+    }
 
     errno = 0;
     pid = fork();
@@ -396,22 +395,25 @@ pid_t create_child(int sock, unsigned int num_chld, int *pfd, int close_fd)
             }
         }
 
-        close(*(pfd + 1));
+        close(pfd[1]);
         if (close_fd != -1)
             close(close_fd);
 
-        manager(sock, num_chld, *pfd);
+        manager(sock, num_chld, pfd[0]);
 
-        close(*pfd);
+        close(pfd[0]);
         close_logs();
         exit(0);
     }
     else if (pid < 0)
     {
-        print_err("<> Error fork(): %s\n", strerror(errno));
+        fprintf(stderr, "<%s:%d> Error fork(): %s\n", __func__, __LINE__, strerror(errno));
+        close(pfd[1]);
+        pfd[1] = -1;
     }
 
-    close(*pfd);
+    close(pfd[0]);
+    *pfd_o = pfd[1];
 
     return pid;
 }

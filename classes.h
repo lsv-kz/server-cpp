@@ -20,7 +20,7 @@ protected:
     int err = 0;
     void check_ranges();
     void parse_ranges(char *sRange);
-    
+
     void reserve()
     {
         if (err) return;
@@ -29,7 +29,7 @@ protected:
             err = 1;
             return;
         }
-        
+
         range = new(std::nothrow) Range [SizeArray];
         if (!range)
         {
@@ -37,7 +37,7 @@ protected:
             return;
         }
     }
-    
+
 public:
     ArrayRanges(const ArrayRanges&) = delete;
     ArrayRanges() = delete;
@@ -52,11 +52,11 @@ public:
             err = 1;
             return *this;
         }
-        
+
         range[nRanges++] = val;
         return *this;
     }
-    
+
     Range *get(unsigned int i)
     {
         if (err) return NULL;
@@ -71,7 +71,7 @@ public:
         else
             return NULL;
     }
-    
+
     int size() { if (err) return 0; return nRanges; }
     int capacity() { if (err) return 0; return SizeArray; }
     int error() { return -err; }
@@ -148,9 +148,9 @@ public://---------------------------------------------------------------
             allSend += len;
             return *this;
         }
-        
+
         lenEntity += len;
-        
+
         while (CHUNK_SIZE_BUF < (i + len))
         {
             int l = CHUNK_SIZE_BUF - i;
@@ -165,20 +165,20 @@ public://---------------------------------------------------------------
                 return *this;
             }
         }
-        
+
         memcpy(buf + MAX_LEN_SIZE_CHUNK + i, s + n, len);
         i += len;
         return *this;
     }
     //------------------------------------------------------------------
-    ClChunked & operator << (const std::string& s)
+    ClChunked & operator << (const String& s)
     {
         if (err) return *this;
         *this << s.c_str();
         return *this;
     }
     //------------------------------------------------------------------
-    ClChunked & operator << (const String& s)
+    ClChunked & operator << (const std::string& s)
     {
         if (err) return *this;
         *this << s.c_str();
@@ -194,9 +194,9 @@ public://---------------------------------------------------------------
             allSend += len;
             return 0;
         }
-        
+
         lenEntity += len;
-        
+
         int n = 0;
         while (CHUNK_SIZE_BUF < (i + len))
         {
@@ -233,7 +233,7 @@ public://---------------------------------------------------------------
                     return ret;
                 }
             }
-            
+
             int rd = CHUNK_SIZE_BUF - i;
             int ret = read_timeout(fdPipe, buf + MAX_LEN_SIZE_CHUNK + i, rd, conf->TimeoutCGI);
             if (ret == 0)
@@ -262,7 +262,7 @@ public://---------------------------------------------------------------
             fcgi_to_cosmos(fcgi_sock, len, conf->TimeoutCGI);
             return 0;
         }
-        
+
         while (len > 0)
         {
             if (CHUNK_SIZE_BUF <= i)
@@ -271,7 +271,7 @@ public://---------------------------------------------------------------
                 if (ret < 0)
                     return ret;
             }
-            
+
             int rd = (len < (CHUNK_SIZE_BUF - i)) ? len : (CHUNK_SIZE_BUF - i);
             int ret = read_timeout(fcgi_sock, buf + MAX_LEN_SIZE_CHUNK + i, rd, conf->TimeoutCGI);
             if (ret <= 0)
@@ -286,11 +286,11 @@ public://---------------------------------------------------------------
                 i = 0;
                 return -1;
             }
-            
+
             i += ret;
             len -= ret;
         }
-        
+
         return 0;
     }
     //------------------------------------------------------------------

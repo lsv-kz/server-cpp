@@ -107,7 +107,7 @@ int strlcmp_case(const char *s1, const char *s2, int len)
     return 0;
 }
 //======================================================================
-int get_int_method(char *s)
+int get_int_method(const char *s)
 {
     if (!memcmp(s, "GET", 3))
         return M_GET;
@@ -138,7 +138,7 @@ const char *get_str_method(int i)
     return "";
 }
 //======================================================================
-int get_int_http_prot(char *s)
+int get_int_http_prot(const char *s)
 {
     if (!memcmp(s, "HTTP/1.1", 8))
         return HTTP11;
@@ -265,7 +265,6 @@ const char *istextfile(const char *path)
     f = fopen(path, "r");
     if (f == NULL)
     {
-        printf("error fopen\n");
         print_err("<%s:%d> Error fopen(%s): %s\n", __func__, __LINE__, path, strerror(errno));
         return "";
     }
@@ -362,7 +361,6 @@ const char *ismediafile(const char *path)
     f = fopen(path, "r");
     if (f == NULL)
     {
-        printf("error fopen\n");
         print_err("<%s:%d> Error fopen(%s): %s\n", __func__, __LINE__, path, strerror(errno));
         return "";
     }

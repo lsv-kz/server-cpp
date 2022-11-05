@@ -59,7 +59,7 @@ void create_conf_file(const char *path)
     fprintf(f, "SendFile    y\n");
     fprintf(f, "SndBufSize  32768\n\n");
 
-    fprintf(f, "OverMaxConnections  1024\n");
+    fprintf(f, "OverMaxConnections   100\n");
     fprintf(f, "MaxWorkConnections   768\n\n");
 
     fprintf(f, "MaxEventConnections  100\n\n");
@@ -442,13 +442,7 @@ int read_conf_file(FILE *fconf)
         c.ScriptPath = "";
         fprintf(stderr, "!!! Error ScriptPath [%s]\n", c.ScriptPath.c_str());
     }
-
-    if ((c.NumProc < 1) || (c.NumProc > 16))
-    {
-        fprintf(stderr, "<%s:%d> Error: Number of Processes = %d; [1 < NumChld <= 6]\n", __func__, __LINE__, c.NumProc);
-        return -1;
-    }
-
+    //------------------------------------------------------------------
     if (c.MinThreads < 1)
         c.MinThreads = 1;
 
@@ -464,6 +458,7 @@ int read_conf_file(FILE *fconf)
         fprintf(stderr, "<%s:%d> Error config file: MaxWorkConnections=%d\n", __func__, __LINE__, c.MaxWorkConnections);
         return -1;
     }
+
     const int fd_stdio = 3, fd_logs = 2, fd_serv_sock = 1, fd_pipe = 2; // 8
     long min_open_fd = fd_stdio + fd_logs + fd_serv_sock + fd_pipe;
     c.MaxConnections = c.MaxWorkConnections + c.OverMaxConnections;
@@ -477,7 +472,11 @@ int read_conf_file(FILE *fconf)
         c.MaxConnections = n;
         c.MaxWorkConnections = n;
     }
-    //fprintf(stderr, "<%s:%d> max_fd=%d\n", __func__, __LINE__, n);
+    //fprintf(stderr, " MaxConnections: %d\n", __func__, __LINE__, conf->MaxConnections);
+    //------------------------------------------------------------------
+    if (c.NumProc > 8)
+        c.NumProc = 8;
+
     return 0;
 }
 //======================================================================

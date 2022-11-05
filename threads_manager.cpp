@@ -273,19 +273,12 @@ int write_to_pipe(int fd, char *data, int size);
 //======================================================================
 void manager(int sockServer, unsigned int numProc, int fd_in)
 {
-    int pfd[2];
+    int pfd_out;
     int end_proc = 0;
 
     if ((numProc + 1) < conf->NumProc)  // create next worker process
     {
-        // pipe for control of next process
-        if (pipe(pfd) < 0)
-        {
-            fprintf(stderr, "<%s:%d> Error pipe(): %s\n", __func__, __LINE__, strerror(errno));
-            exit(1);
-        }
-
-        pid_child = create_child(sockServer, numProc + 1, pfd, fd_in);
+        pid_child = create_child(sockServer, numProc + 1, &pfd_out, fd_in);
         if (pid_child < 0)
         {
             fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
@@ -409,7 +402,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
             {
                 print_err("[%d] <%s:%d> \"We are not here. It is not us.\"\n", numProc, __func__, __LINE__);
                 child_status = PROC_CLOSE;
-                write(pfd[1], &child_status, sizeof(child_status));
+                write(pfd_out, &child_status, sizeof(child_status));
                 break;
             }
         }
@@ -422,7 +415,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
                 if (end_proc == 0)
                 { // Allow connections next worker process
                     child_status = CONNECT_ALLOW;
-                    if (write_to_pipe(pfd[1], &child_status, sizeof(child_status)) < 0)
+                    if (write_to_pipe(pfd_out, &child_status, sizeof(child_status)) < 0)
                         break;
                 }
                 else // Blind alley
@@ -433,7 +426,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
                 if (end_proc == 0)
                 { // Do not allow connections next process
                     child_status = CONNECT_IGN;
-                    if (write_to_pipe(pfd[1], &child_status, sizeof(child_status)) < 0)
+                    if (write_to_pipe(pfd_out, &child_status, sizeof(child_status)) < 0)
                         break;
                 }
             }
@@ -465,7 +458,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
                 if (end_proc == 0)
                 {// Close next process
                     child_status = PROC_CLOSE;
-                    write(pfd[1], &child_status, sizeof(child_status));
+                    write(pfd_out, &child_status, sizeof(child_status));
                 }
                 break;
             }
@@ -519,7 +512,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
     while ((pid = wait(NULL)) != -1)
         fprintf(stderr, "<%d> wait() pid: %d\n", __LINE__, pid);
     if ((numProc + 1) < conf->NumProc)
-        close(pfd[1]);
+        close(pfd_out);
 
     wait_close_all_conn();
 
@@ -535,7 +528,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in)
     thrReqMan.join();
     EventHandler.join();
 
-    usleep(1000); // for valgrind (memory debugger)
+    usleep(100000); // for valgrind (memory debugger)
     delete ReqMan;
 }
 //======================================================================
