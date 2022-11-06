@@ -59,7 +59,7 @@ void create_conf_file(const char *path)
     fprintf(f, "SendFile    y\n");
     fprintf(f, "SndBufSize  32768\n\n");
 
-    fprintf(f, "OverMaxConnections   100\n");
+    fprintf(f, "OverMaxWorkConnections   100\n");
     fprintf(f, "MaxWorkConnections   768\n\n");
 
     fprintf(f, "MaxEventConnections  100\n\n");
@@ -291,8 +291,8 @@ int read_conf_file(FILE *fconf)
                 c.SendFile = (char)tolower(s2[0]);
             else if ((s1 == "SndBufSize") && is_number(s2.c_str()))
                 s2 >> c.SndBufSize;
-            else if ((s1 == "OverMaxConnections") && is_number(s2.c_str()))
-                s2 >> c.OverMaxConnections;
+            else if ((s1 == "OverMaxWorkConnections") && is_number(s2.c_str()))
+                s2 >> c.OverMaxWorkConnections;
             else if ((s1 == "MaxWorkConnections") && is_number(s2.c_str()))
                 s2 >> c.MaxWorkConnections;
             else if ((s1 == "MaxEventConnections") && is_number(s2.c_str()))
@@ -459,10 +459,10 @@ int read_conf_file(FILE *fconf)
         return -1;
     }
 
-    const int fd_stdio = 3, fd_logs = 2, fd_serv_sock = 1, fd_pipe = 2; // 8
+    const int fd_stdio = 3, fd_logs = 2, fd_serv_sock = 1, fd_pipe = 2 + 2; // 10
     long min_open_fd = fd_stdio + fd_logs + fd_serv_sock + fd_pipe;
-    c.MaxConnections = c.MaxWorkConnections + c.OverMaxConnections;
-    int max_fd = min_open_fd + c.MaxWorkConnections * 2 + c.OverMaxConnections;
+    c.MaxConnections = c.MaxWorkConnections + c.OverMaxWorkConnections;
+    int max_fd = min_open_fd + c.MaxWorkConnections * 2 + c.OverMaxWorkConnections;
     n = set_max_fd(max_fd);
     if (n == -1)
         return -1;

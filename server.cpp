@@ -8,8 +8,11 @@ int Connect::serverSocket;
 int create_server_socket(const Config *c);
 int read_conf_file(const char *path_conf);
 void free_fcgi_list();
-void manager(int, int);
 int set_uid();
+
+void print_help(const char *name);
+void print_limits();
+void print_config();
 
 static int main_proc();
 
@@ -55,94 +58,16 @@ static void signal_handler(int sig)
         write(pfd_out, &status, sizeof(status));// close first worker process
     }
     else
-    {
         fprintf(stderr, "<%s:%d> ? sig=%d\n", __func__, __LINE__, sig);
-    }
 }
 //======================================================================
 void create_proc(int NumProc)
 {
-    pid_child = create_child(sockServer, 0, &pfd_out, -1);
+    pid_child = create_first_child(sockServer, 0, &pfd_out);
     if (pid_child < 0)
     {
-        fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
+        fprintf(stderr, "<%s:%d> Error create_first_child()\n", __func__, __LINE__);
         exit(1);
-    }
-}
-//======================================================================
-void print_help(const char *name)
-{
-    fprintf(stderr, "Usage: %s [-l] [-c configfile] [-s signal]\n"
-                    "Options:\n"
-                    "   -h              : help\n"
-                    "   -p              : print parameters\n"
-                    "   -c configfile   : default: \"./server.conf\"\n"
-                    "   -s signal       : restart, close, abort\n", name);
-}
-//======================================================================
-void print_limits()
-{
-    struct rlimit lim;
-    if (getrlimit(RLIMIT_NOFILE, &lim) == -1)
-        fprintf(stdout, "<%s:%d> Error getrlimit(RLIMIT_NOFILE): %s\n", __func__, __LINE__, strerror(errno));
-    else
-        printf(" RLIMIT_NOFILE: cur=%ld, max=%ld\n", (long)lim.rlim_cur, (long)lim.rlim_max);
-}
-//======================================================================
-void print_config()
-{
-    print_limits();
-    
-    cout << "   ServerSoftware       : " << conf->ServerSoftware.c_str()
-         << "\n\n   ServerAddr           : " << conf->ServerAddr.c_str()
-         << "\n   ServerPort           : " << conf->ServerPort.c_str()
-         << "\n\n   ListenBacklog        : " << conf->ListenBacklog
-         << "\n   tcp_cork             : " << conf->tcp_cork
-         << "\n   tcp_nodelay          : " << conf->tcp_nodelay
-
-         << "\n\n   SndBufSize           : " << conf->SndBufSize
-         << "\n   SendFile             : " << conf->SendFile
-
-         << "\n\n   OverMaxConnections   : " << conf->OverMaxConnections
-         << "\n   MaxWorkConnections   : " << conf->MaxWorkConnections
-         << "\n   MaxConnections       : " << conf->MaxConnections
-         << "\n\n   MaxEventConnections  : " << conf->MaxEventConnections
-
-         << "\n\n   NumProc              : " << conf->NumProc
-         << "\n   MaxThreads           : " << conf->MaxThreads
-         << "\n   MimThreads           : " << conf->MinThreads
-         << "\n   MaxCgiProc           : " << conf->MaxCgiProc
-
-         << "\n\n   MaxRequestsPerClient : " << conf->MaxRequestsPerClient
-         << "\n   TimeoutKeepAlive     : " << conf->TimeoutKeepAlive
-         << "\n   Timeout              : " << conf->Timeout
-         << "\n   TimeoutCGI           : " << conf->TimeoutCGI
-         << "\n   TimeoutPoll          : " << conf->TimeoutPoll
-
-         << "\n\n   MaxRanges            : " << conf->MaxRanges
-
-         << "\n\n   ClientMaxBodySize    : " << conf->ClientMaxBodySize
-
-         << "\n\n   ShowMediaFiles       : " << conf->ShowMediaFiles
-
-         << "\n\n   index_html           : " << conf->index_html
-         << "\n   index_php            : " << conf->index_php
-         << "\n   index_pl             : " << conf->index_pl
-         << "\n   index_fcgi           : " << conf->index_fcgi
-         << "\n\n   DocumentRoot         : " << conf->DocumentRoot.c_str()
-         << "\n   ScriptPath           : " << conf->ScriptPath.c_str()
-         << "\n   LogPath              : " << conf->LogPath.c_str()
-         << "\n\n   UsePHP               : " << conf->UsePHP.c_str()
-         << "\n   PathPHP              : " << conf->PathPHP.c_str()
-         << "\n\n   User                 : " << conf->user.c_str()
-         << "\n   Group                : " << conf->group.c_str()
-         << "\n";
-         
-    cout << "   ------------- FastCGI -------------\n";
-    fcgi_list_addr *i = conf->fcgi_list;
-    for (; i; i = i->next)
-    {
-        cout << "   [" << i->script_name.c_str() << " : " << i->addr.c_str() << "]\n";
     }
 }
 //======================================================================
@@ -207,7 +132,7 @@ int main(int argc, char *argv[])
                 print_help(argv[0]);
                 return 1;
             }
-            
+
             if (read_conf_file(conf_path.c_str()))
                 return 1;
             pidFile = conf->PidFilePath + "/pid.txt";
@@ -312,12 +237,6 @@ int main_proc()
 {
     pid_t pid = getpid();
     //------------------------------------------------------------------
-    cout << "\n[" << get_time().c_str() << "] - server \"" << conf->ServerSoftware.c_str()
-         << "\" run port: " << conf->ServerPort.c_str() << "\n";
-    cerr << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
-    cout << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
-    cerr << "      OverMaxConnections: " << conf->OverMaxConnections << ", MaxWorkConnections: " << conf->MaxWorkConnections << "\n";
-    //------------------------------------------------------------------
     for ( ; environ[0]; )
     {
         char *p, buf[512];
@@ -330,7 +249,7 @@ int main_proc()
     //------------------------------------------------------------------
     create_proc(conf->NumProc);  // create first worker process
     //------------------------------------------------------------------
-    //---------- Allow connections first worker process ---------------
+    //---------- Allow connections first worker process ----------------
     char status = CONNECT_ALLOW;
     int ret;
     if ((ret = write(pfd_out, &status, sizeof(status))) < 0)
@@ -344,10 +263,17 @@ int main_proc()
     //------------------------------------------------------------------
     close(sockServer);
     free_fcgi_list();
-
+    //------------------------------------------------------------------
+    cout << "\n[" << get_time().c_str() << "] - server \"" << conf->ServerSoftware.c_str()
+         << "\" run port: " << conf->ServerPort.c_str() << "\n";
+    cerr << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
+    cout << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
+    cerr << "   MaxWorkConnections: " << conf->MaxWorkConnections << ", OverMaxWorkConnections: " << conf->OverMaxWorkConnections << "\n";
+    cerr << "   SndBufSize: " << conf->SndBufSize << ", MaxEventConnections: " << conf->MaxEventConnections << "\n";
+    //------------------------------------------------------------------
     while ((pid = wait(NULL)) != -1)
     {
-        print_err("<%s> wait() pid: %d\n", __func__, pid);
+        fprintf(stderr, "<%s> wait() pid: %d\n", __func__, pid);
     }
 
     shutdown(sockServer, SHUT_RDWR);
@@ -361,9 +287,9 @@ int main_proc()
     return 0;
 }
 //======================================================================
-void manager(int sock, unsigned int num, int fd_in);
+void manager(int sock, unsigned int num, int fd_in, int fd_out);
 //======================================================================
-pid_t create_child(int sock, unsigned int num_chld, int *pfd_o, int close_fd)
+pid_t create_first_child(int sock, unsigned int num_chld, int *pfd_o)
 {
     pid_t pid;
     int pfd[2];
@@ -396,10 +322,8 @@ pid_t create_child(int sock, unsigned int num_chld, int *pfd_o, int close_fd)
         }
 
         close(pfd[1]);
-        if (close_fd != -1)
-            close(close_fd);
 
-        manager(sock, num_chld, pfd[0]);
+        manager(sock, num_chld, pfd[0], -1);
 
         close(pfd[0]);
         close_logs();
@@ -416,4 +340,81 @@ pid_t create_child(int sock, unsigned int num_chld, int *pfd_o, int close_fd)
     *pfd_o = pfd[1];
 
     return pid;
+}
+//======================================================================
+void print_help(const char *name)
+{
+    fprintf(stderr, "Usage: %s [-l] [-c configfile] [-s signal]\n"
+                    "Options:\n"
+                    "   -h              : help\n"
+                    "   -p              : print parameters\n"
+                    "   -c configfile   : default: \"./server.conf\"\n"
+                    "   -s signal       : restart, close, abort\n", name);
+}
+//======================================================================
+void print_limits()
+{
+    struct rlimit lim;
+    if (getrlimit(RLIMIT_NOFILE, &lim) == -1)
+        fprintf(stdout, "<%s:%d> Error getrlimit(RLIMIT_NOFILE): %s\n", __func__, __LINE__, strerror(errno));
+    else
+        printf(" RLIMIT_NOFILE: cur=%ld, max=%ld\n", (long)lim.rlim_cur, (long)lim.rlim_max);
+}
+//======================================================================
+void print_config()
+{
+    print_limits();
+
+    cout << "   ServerSoftware         : " << conf->ServerSoftware.c_str()
+         << "\n\n   ServerAddr             : " << conf->ServerAddr.c_str()
+         << "\n   ServerPort             : " << conf->ServerPort.c_str()
+         << "\n\n   ListenBacklog          : " << conf->ListenBacklog
+         << "\n   tcp_cork               : " << conf->tcp_cork
+         << "\n   tcp_nodelay            : " << conf->tcp_nodelay
+
+         << "\n\n   SndBufSize             : " << conf->SndBufSize
+         << "\n   SendFile               : " << conf->SendFile
+
+         << "\n\n   OverMaxWorkConnections : " << conf->OverMaxWorkConnections
+         << "\n   MaxWorkConnections     : " << conf->MaxWorkConnections
+         << "\n   MaxConnections         : " << conf->MaxConnections
+
+         << "\n\n   MaxEventConnections    : " << conf->MaxEventConnections
+
+         << "\n\n   NumProc                : " << conf->NumProc
+         << "\n   MaxThreads             : " << conf->MaxThreads
+         << "\n   MimThreads             : " << conf->MinThreads
+         << "\n   MaxCgiProc             : " << conf->MaxCgiProc
+
+         << "\n\n   MaxRequestsPerClient   : " << conf->MaxRequestsPerClient
+         << "\n   TimeoutKeepAlive       : " << conf->TimeoutKeepAlive
+         << "\n   Timeout                : " << conf->Timeout
+         << "\n   TimeoutCGI             : " << conf->TimeoutCGI
+         << "\n   TimeoutPoll            : " << conf->TimeoutPoll
+
+         << "\n\n   MaxRanges              : " << conf->MaxRanges
+
+         << "\n\n   ClientMaxBodySize      : " << conf->ClientMaxBodySize
+
+         << "\n\n   ShowMediaFiles         : " << conf->ShowMediaFiles
+
+         << "\n\n   index_html             : " << conf->index_html
+         << "\n   index_php              : " << conf->index_php
+         << "\n   index_pl               : " << conf->index_pl
+         << "\n   index_fcgi             : " << conf->index_fcgi
+         << "\n\n   DocumentRoot           : " << conf->DocumentRoot.c_str()
+         << "\n   ScriptPath             : " << conf->ScriptPath.c_str()
+         << "\n   LogPath                : " << conf->LogPath.c_str()
+         << "\n\n   UsePHP                 : " << conf->UsePHP.c_str()
+         << "\n   PathPHP                : " << conf->PathPHP.c_str()
+         << "\n\n   User                   : " << conf->user.c_str()
+         << "\n   Group                  : " << conf->group.c_str()
+         << "\n";
+
+    cout << "   ------------- FastCGI -------------\n";
+    fcgi_list_addr *i = conf->fcgi_list;
+    for (; i; i = i->next)
+    {
+        cout << "   [" << i->script_name.c_str() << " : " << i->addr.c_str() << "]\n";
+    }
 }

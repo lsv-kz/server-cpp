@@ -110,7 +110,7 @@ struct Config
     char SendFile;
     int SndBufSize;
 
-    int OverMaxConnections;
+    int OverMaxWorkConnections;
     int MaxWorkConnections;
     int MaxConnections;
     
@@ -163,7 +163,7 @@ struct Config
         }
         //std::cout << __func__ << " ******* " << getpid() << " *******\n";
     }
-    
+
     void free_fcgi_list()
     {
         fcgi_list_addr *t;
@@ -299,7 +299,8 @@ int cgi(Connect *req);
 int fcgi(Connect *req);
 int create_fcgi_socket(const char *host);
 
-pid_t create_child(int sock, unsigned int num_chld, int*, int);
+pid_t create_first_child(int sock, unsigned int num_chld, int*);
+pid_t create_child(int sock, unsigned int num_chld, int*, int*);
 //----------------------------------------------------------------------
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);
