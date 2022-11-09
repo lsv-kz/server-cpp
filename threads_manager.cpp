@@ -142,7 +142,7 @@ mtx_conn.unlock();
 void wait_close_conn()
 {
 unique_lock<mutex> lk(mtx_conn);
-    while (num_conn >= (conf->MaxConnections - conf->OverMaxWorkConnections))
+    while (num_conn >= (conf->MaxConnections - conf->ReserveConnections))
     {
         cond_close_conn.wait(lk);
     }
@@ -269,26 +269,25 @@ static void signal_handler_child(int sig)
 }
 //======================================================================
 Connect *create_req();
-int write_to_pipe(int fd, char *data, int size);
-int read_to_pipe(int fd, char *data, int size);
+int write_(int fd, char *data, int size);
+int read_(int fd, char *data, int size);
 //======================================================================
-void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out)
+void manager(int sockServer, unsigned int numProc, int fd_in)
 {
-    int pfd_to_child[2] = {-1, -1};
+    int pfd_out = -1;
     int end_proc = 0;
 
     if ((numProc + 1) < conf->NumProc)  // create next worker process
     {
-        int fd[2] = {fd_in, fd_out};
-        pid_child = create_child(sockServer, numProc + 1, pfd_to_child, fd);
+        pid_child = create_child(sockServer, numProc + 1, &pfd_out, fd_in);
         if (pid_child < 0)
         {
             fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
             exit(1);
-        }  // min open fd = 10
+        }  // min open fd = 8
     }
     else
-        end_proc = 1; // This is last worker process (min open fd = 8)
+        end_proc = 1; // This is last worker process (min open fd = 7)
     //------------------------------------------------------------------
     RequestManager *ReqMan = new(nothrow) RequestManager(numProc);
     if (!ReqMan)
@@ -404,7 +403,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out)
             {
                 print_err("[%d] <%s:%d> \"We are not here. It is not us.\"\n", numProc, __func__, __LINE__);
                 child_status = PROC_CLOSE;
-                write_to_pipe(pfd_to_child[1], &child_status, sizeof(child_status));
+                write_(pfd_out, &child_status, sizeof(child_status));
                 break;
             }
         }
@@ -417,7 +416,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out)
                 if (end_proc == 0)
                 { // Allow connections next worker process
                     child_status = CONNECT_ALLOW;
-                    if (write_to_pipe(pfd_to_child[1], &child_status, sizeof(child_status)) < 0)
+                    if (write_(pfd_out, &child_status, sizeof(child_status)) < 0)
                         break;
                 }
                 else // Blind alley
@@ -428,10 +427,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out)
                 if (end_proc == 0)
                 { // Do not allow connections next process
                     child_status = CONNECT_IGN;
-                    if (write_to_pipe(pfd_to_child[1], &child_status, sizeof(child_status)) < 0)
-                        break;
-                    char ch;
-                    if (read_to_pipe(pfd_to_child[0], &ch, 1) <= 0)
+                    if (write_(pfd_out, &child_status, sizeof(child_status)) < 0)
                         break;
                 }
             }
@@ -440,17 +436,15 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out)
         int ret_poll = poll(fdrd, num_fd, -1);
         if (ret_poll <= 0)
         {
-            int err = errno;
-            print_err("[%d] <%s:%d> Error poll()=-1: %s\n", numProc, __func__, __LINE__, strerror(err));
-            if (err == EINTR)
+            if (errno == EINTR)
                 continue;
-            else
-                break;
+            print_err("[%d] <%s:%d> Error poll()=-1: %s\n", numProc, __func__, __LINE__, strerror(errno));
+            break;
         }
 
         if (fdrd[0].revents == POLLIN)
         {
-            if (read_to_pipe(fd_in, &status, sizeof(status)) <= 0)
+            if (read_(fd_in, &status, sizeof(status)) <= 0)
             {
                 print_err("[%d] <%s:%d> Error read(): %s\n", numProc, __func__, __LINE__, strerror(errno));
                 break;
@@ -459,18 +453,12 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out)
             ret_poll--;
             if (status == PROC_CLOSE)
             {
-                print_err("[%d] <%s:%d> status=%d\n", numProc, __func__, __LINE__, status); 
                 if (end_proc == 0)
                 {// Close next process
                     child_status = PROC_CLOSE;
-                    write_to_pipe(pfd_to_child[1], &child_status, sizeof(child_status));
+                    write_(pfd_out, &child_status, sizeof(child_status));
                 }
                 break;
-            }
-            else if ((status == CONNECT_IGN) && (numProc != 0))
-            {
-                if (write_to_pipe(fd_out, &status, sizeof(child_status)) < 0)
-                    break;
             }
         }
         
@@ -522,10 +510,7 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out)
     while ((pid = wait(NULL)) != -1)
         fprintf(stderr, "<%d> wait() pid: %d\n", __LINE__, pid);
     if ((numProc + 1) < conf->NumProc)
-    {
-        close(pfd_to_child[0]);
-        close(pfd_to_child[1]);
-    }
+        close(pfd_out);
 
     wait_close_all_conn();
 
@@ -553,7 +538,7 @@ Connect *create_req(void)
     return req;
 }
 //======================================================================
-int write_to_pipe(int fd, char *data, int size)
+int write_(int fd, char *data, int size)
 {
     int ret, err;
 a1: 
@@ -568,7 +553,7 @@ a1:
     return ret;
 }
 //======================================================================
-int read_to_pipe(int fd, char *data, int size)
+int read_(int fd, char *data, int size)
 {
     int ret, err;
 a1: 
@@ -582,72 +567,4 @@ a1:
     }
 
     return ret;
-}
-//======================================================================
-pid_t create_child(int sock, unsigned int num_chld, int *pfd_o, int *close_fd)
-{
-    pid_t pid;
-    int pfd_to_child[2], pfd_from_child[2];
-
-    if (pipe(pfd_to_child) < 0)
-    {
-        fprintf(stderr, "<%s:%d> Error pipe(): %s\n", __func__, __LINE__, strerror(errno));
-        return -1;
-    }
-
-    if (pipe(pfd_from_child) < 0)
-    {
-        fprintf(stderr, "<%s:%d> Error pipe(): %s\n", __func__, __LINE__, strerror(errno));
-        return -1;
-    }
-
-    errno = 0;
-    pid = fork();
-
-    if (pid == 0)
-    {
-        uid_t uid = getuid();
-        if (uid == 0)
-        {
-            if (setgid(conf->server_gid) == -1)
-            {
-                fprintf(stderr, "<%s:%d> Error setgid(%u): %s\n", __func__, __LINE__, conf->server_gid, strerror(errno));
-                exit(1);
-            }
-
-            if (setuid(conf->server_gid) == -1)
-            {
-                fprintf(stderr, "<%s:%d> Error setuid(%u): %s\n", __func__, __LINE__, conf->server_gid, strerror(errno));
-                exit(1);
-            }
-        }
-
-        close(pfd_to_child[1]);
-        close(pfd_from_child[0]);
-
-        close(close_fd[0]);
-        if (close_fd[1] != -1)
-            close(close_fd[1]);
-
-        manager(sock, num_chld, pfd_to_child[0], pfd_from_child[1]);
-
-        close(pfd_to_child[0]);
-        close(pfd_from_child[1]);
-
-        close_logs();
-        exit(0);
-    }
-    else if (pid < 0)
-    {
-        fprintf(stderr, "<%s:%d> Error fork(): %s\n", __func__, __LINE__, strerror(errno));
-        return -1;
-    }
-
-    close(pfd_to_child[0]);
-    close(pfd_from_child[1]);
-    
-    *pfd_o = pfd_from_child[0];
-    *(pfd_o + 1) = pfd_to_child[1];
-
-    return pid;
 }

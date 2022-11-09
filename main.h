@@ -110,7 +110,7 @@ struct Config
     char SendFile;
     int SndBufSize;
 
-    int OverMaxWorkConnections;
+    int ReserveConnections;
     int MaxWorkConnections;
     int MaxConnections;
     
@@ -299,8 +299,7 @@ int cgi(Connect *req);
 int fcgi(Connect *req);
 int create_fcgi_socket(const char *host);
 
-pid_t create_first_child(int sock, unsigned int num_chld, int*);
-pid_t create_child(int sock, unsigned int num_chld, int*, int*);
+pid_t create_child(int sock, unsigned int num_chld, int *pfd, int fd_close);
 //----------------------------------------------------------------------
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);

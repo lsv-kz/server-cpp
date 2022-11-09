@@ -63,10 +63,10 @@ static void signal_handler(int sig)
 //======================================================================
 void create_proc(int NumProc)
 {
-    pid_child = create_first_child(sockServer, 0, &pfd_out);
+    pid_child = create_child(sockServer, 0, &pfd_out, -1);
     if (pid_child < 0)
     {
-        fprintf(stderr, "<%s:%d> Error create_first_child()\n", __func__, __LINE__);
+        fprintf(stderr, "<%s:%d> Error create_child()\n", __func__, __LINE__);
         exit(1);
     }
 }
@@ -268,7 +268,7 @@ int main_proc()
          << "\" run port: " << conf->ServerPort.c_str() << "\n";
     cerr << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
     cout << "   pid="  << pid << "; uid=" << getuid() << "; gid=" << getgid() << "\n";
-    cerr << "   MaxWorkConnections: " << conf->MaxWorkConnections << ", OverMaxWorkConnections: " << conf->OverMaxWorkConnections << "\n";
+    cerr << "   MaxWorkConnections: " << conf->MaxWorkConnections << ", ReserveConnections: " << conf->ReserveConnections << "\n";
     cerr << "   SndBufSize: " << conf->SndBufSize << ", MaxEventConnections: " << conf->MaxEventConnections << "\n";
     //------------------------------------------------------------------
     while ((pid = wait(NULL)) != -1)
@@ -287,9 +287,9 @@ int main_proc()
     return 0;
 }
 //======================================================================
-void manager(int sock, unsigned int num, int fd_in, int fd_out);
+void manager(int sock, unsigned int num, int fd_in);
 //======================================================================
-pid_t create_first_child(int sock, unsigned int num_chld, int *pfd_o)
+pid_t create_child(int sock, unsigned int num_chld, int *pfd_o, int close_fd)
 {
     pid_t pid;
     int pfd[2];
@@ -322,8 +322,10 @@ pid_t create_first_child(int sock, unsigned int num_chld, int *pfd_o)
         }
 
         close(pfd[1]);
+        if (close_fd != -1)
+            close(close_fd);
 
-        manager(sock, num_chld, pfd[0], -1);
+        manager(sock, num_chld, pfd[0]);
 
         close(pfd[0]);
         close_logs();
@@ -375,7 +377,7 @@ void print_config()
          << "\n\n   SndBufSize             : " << conf->SndBufSize
          << "\n   SendFile               : " << conf->SendFile
 
-         << "\n\n   OverMaxWorkConnections : " << conf->OverMaxWorkConnections
+         << "\n\n   ReserveConnections     : " << conf->ReserveConnections
          << "\n   MaxWorkConnections     : " << conf->MaxWorkConnections
          << "\n   MaxConnections         : " << conf->MaxConnections
 
