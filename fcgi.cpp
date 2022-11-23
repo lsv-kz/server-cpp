@@ -263,7 +263,7 @@ int fcgi_send_param(Connect *req, int fcgi_sock)
         if(req->req_hd.iReqContentType >= 0)
         {
             Fcgi.add("CONTENT_TYPE", req->reqHdValue[req->req_hd.iReqContentType]);
-            print_err(req, "<%s:%d> %s\n", __func__, __LINE__, req->reqHdValue[req->req_hd.iReqContentType]);
+            //print_err(req, "<%s:%d> %s\n", __func__, __LINE__, req->reqHdValue[req->req_hd.iReqContentType]);
         }
         
         if(req->req_hd.iReqContentLength >= 0)

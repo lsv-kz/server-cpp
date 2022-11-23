@@ -39,10 +39,10 @@ int Connect::hd_read()
     errno = 0;
     if (err)
         return -1;
-    int len = SIZE_BUF_REQUEST - lenBufReq - 1;
-    if (len <= 0)
+    int num_read = SIZE_BUF_REQUEST - lenBufReq - 1;
+    if (num_read <= 0)
         return -RS414;
-    int n = recv(clientSocket, bufReq + lenBufReq, len, 0);
+    int n = recv(clientSocket, bufReq + lenBufReq, num_read, 0);
     if (n < 0)
     {
         if (errno == EAGAIN)
@@ -56,39 +56,37 @@ int Connect::hd_read()
     lenBufReq += n;
     bufReq[lenBufReq] = 0;
 
-    n = empty_line();
-    if (n == 1)
-    {
+    n = find_empty_line();
+    if (n == 1) // empty line found
         return lenBufReq;
-    }
-    else if (n < 0)
+    else if (n < 0) // error
         return n;
 
     return 0;
 }
 //----------------------------------------------------------------------
-int Connect::empty_line()
+int Connect::find_empty_line()
 {
     if (err) return -1;
     timeout = conf->Timeout;
-    char *pr, *pn, ch;
+    char *pCR, *pLF, ch;
     while (lenTail > 0)
     {
         int i = 0, len_line = 0;
-        pr = pn = NULL;
-        while (i < lenTail)
+        pCR = pLF = NULL;
+        while (i < lenTail) // loop to find end of line
         {
             ch = *(p_newline + i);
             if (ch == '\r')
             {
                 if (i == (lenTail - 1))
                     return 0;
-                pr = p_newline + i;
+                pCR = p_newline + i;
             }
             else if (ch == '\n')
             {
-                pn = p_newline + i;
-                if ((pr) && ((pn - pr) != 1))
+                pLF = p_newline + i;
+                if ((pCR) && ((pLF - pCR) != 1))
                     return -RS400;
                 i++;
                 break;
@@ -98,27 +96,27 @@ int Connect::empty_line()
             i++;
         }
 
-        if (pn)
+        if (pLF) // found end of line '\n'
         {
-            if (pr == NULL)
-                *pn = 0;
+            if (pCR == NULL)
+                *pLF = 0;
             else
-                *pr = 0;
+                *pCR = 0;
 
-            if (len_line == 0)
+            if (len_line == 0) // found empty line
             {
-                if (countReqHeaders == 0)
+                if (countReqHeaders == 0) // empty lines before Starting Line
                 {
-                    if ((pn - bufReq + 1) > 4)
+                    if ((pLF - bufReq + 1) > 4) // more than two empty lines
                         return -RS400;
                     lenTail -= i;
-                    p_newline = pn + 1;
+                    p_newline = pLF + 1;
                     continue;
                 }
 
-                if (lenTail > 0)
+                if (lenTail > 0) // tail after empty line (Message Body for POST method)
                 {
-                    tail = pn + 1;
+                    tail = pLF + 1;
                     lenTail -= i;
                 }
                 else 
@@ -135,11 +133,9 @@ int Connect::empty_line()
                 return -RS500;
 
             lenTail -= i;
-            p_newline = pn + 1;
+            p_newline = pLF + 1;
         }
-        else if (pr && (!pn))
-            return -RS400;
-        else
+        else // not found end of line '\n'
             break;
     }
 

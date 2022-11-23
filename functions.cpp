@@ -271,7 +271,7 @@ const char *istextfile(const char *path)
     
     const char *s = istextfile_(f);
     fclose(f);
-print_err("<%s:%d> %s [%s]\n", __func__, __LINE__, path, s);
+//print_err("<%s:%d> %s [%s]\n", __func__, __LINE__, path, s);
     return s;
 }
 //======================================================================
@@ -367,7 +367,7 @@ const char *ismediafile(const char *path)
     
     const char *s = ismediafile_(f);
     fclose(f);
-print_err("<%s:%d> %s [%s]\n", __func__, __LINE__, path, s);
+//print_err("<%s:%d> %s [%s]\n", __func__, __LINE__, path, s);
     return s;
 }
 //======================================================================
@@ -548,6 +548,9 @@ int parse_startline_request(Connect *req, char *s)
     if (!req->reqMethod)
         return -RS400;
     //------------------------------- uri ------------------------------
+    if (*p == ' ')
+		return -RS400;
+    req->uriLen = 0;
     p_val = p;
     while (*p)
     {
@@ -558,6 +561,7 @@ int parse_startline_request(Connect *req, char *s)
             break;
         }
         p++;
+        req->uriLen++;
     }
 
     req->uri = p_val;

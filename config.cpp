@@ -12,7 +12,11 @@ int check_path(string & path)
     int ret = stat(path.c_str(), &st);
     if (ret == -1)
     {
-        fprintf(stderr, "<%s:%d> Error stat(): %s\n", __func__, __LINE__, strerror(errno));
+        fprintf(stderr, "<%s:%d> Error stat(%s): %s\n", __func__, __LINE__, path.c_str(), strerror(errno));
+        char buf[2048];
+        char *cwd = getcwd(buf, sizeof(buf));
+        if (cwd)
+            fprintf(stderr, "<%s:%d> cwd: %s\n", __func__, __LINE__, cwd);
         return -1;
     }
 
@@ -59,12 +63,12 @@ void create_conf_file(const char *path)
     fprintf(f, "SendFile    y\n");
     fprintf(f, "SndBufSize  32768\n\n");
 
-    fprintf(f, "ReserveConnections   100\n");
-    fprintf(f, "MaxWorkConnections   768\n\n");
-
+    fprintf(f, "MaxWorkConnections   768\n");
+    fprintf(f, "HysteresisConnections  5\n");
     fprintf(f, "MaxEventConnections  100\n\n");
 
     fprintf(f, "NumProc 1\n");
+    fprintf(f, "MaxNumProc 4\n");
     fprintf(f, "MaxThreads 300\n");
     fprintf(f, "MinThreads 6\n");
     fprintf(f, "MaxCgiProc 15\n\n");
@@ -291,10 +295,10 @@ int read_conf_file(FILE *fconf)
                 c.SendFile = (char)tolower(s2[0]);
             else if ((s1 == "SndBufSize") && is_number(s2.c_str()))
                 s2 >> c.SndBufSize;
-            else if ((s1 == "ReserveConnections") && is_number(s2.c_str()))
-                s2 >> c.ReserveConnections;
             else if ((s1 == "MaxWorkConnections") && is_number(s2.c_str()))
                 s2 >> c.MaxWorkConnections;
+            else if ((s1 == "HysteresisConnections") && is_number(s2.c_str()))
+                s2 >> c.HysteresisConnections;
             else if ((s1 == "MaxEventConnections") && is_number(s2.c_str()))
                 s2 >> c.MaxEventConnections;
             else if ((s1 == "TimeoutPoll") && is_number(s2.c_str()))
@@ -309,6 +313,8 @@ int read_conf_file(FILE *fconf)
                 s2 >> c.PidFilePath;
             else if ((s1 == "NumProc") && is_number(s2.c_str()))
                 s2 >> c.NumProc;
+            else if ((s1 == "MaxNumProc") && is_number(s2.c_str()))
+                s2 >> c.MaxNumProc;
             else if ((s1 == "MaxThreads") && is_number(s2.c_str()))
                 s2 >> c.MaxThreads;
             else if ((s1 == "MinThreads") && is_number(s2.c_str()))
@@ -443,6 +449,12 @@ int read_conf_file(FILE *fconf)
         fprintf(stderr, "!!! Error ScriptPath [%s]\n", c.ScriptPath.c_str());
     }
     //------------------------------------------------------------------
+    if (c.NumProc > c.MaxNumProc)
+    {
+        fprintf(stderr, "<%s:%d> Error: NumProc=%u; MaxNumProc=%u\n", __func__, __LINE__, c.NumProc, c.MaxNumProc);
+        return -1;
+    }
+
     if (c.MinThreads < 1)
         c.MinThreads = 1;
 
@@ -461,21 +473,21 @@ int read_conf_file(FILE *fconf)
 
     const int fd_stdio = 3, fd_logs = 2, fd_serv_sock = 1, fd_pipe = 2; // 8
     long min_open_fd = fd_stdio + fd_logs + fd_serv_sock + fd_pipe;
-    c.MaxConnections = c.MaxWorkConnections + c.ReserveConnections;
-    int max_fd = min_open_fd + c.MaxWorkConnections * 2 + c.ReserveConnections;
+    int max_fd = min_open_fd + c.MaxWorkConnections * 2;
     n = set_max_fd(max_fd);
     if (n == -1)
         return -1;
     else if (n < max_fd)
     {
         n = (n - min_open_fd)/2;
-        c.MaxConnections = n;
         c.MaxWorkConnections = n;
     }
-    //fprintf(stderr, " MaxConnections: %d\n", __func__, __LINE__, conf->MaxConnections);
-    //------------------------------------------------------------------
-    if (c.NumProc > 8)
-        c.NumProc = 8;
+
+    if (c.HysteresisConnections >= (c.MaxWorkConnections / 5))
+    {
+        fprintf(stderr, "<%s:%d> Error: HysteresisConnections >= MaxWorkConnections\n", __func__, __LINE__);
+        return -1;
+    }
 
     return 0;
 }

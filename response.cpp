@@ -66,13 +66,10 @@ void response1(RequestManager *ReqMan)
         if ((p = strchr(req->uri, '?')))
         {
             req->uriLen = p - req->uri;
-            req->sReqParam = req->uri + req->uriLen + 1;
+            req->sReqParam = p + 1;
         }
         else
-        {
             req->sReqParam = NULL;
-            req->uriLen = strlen(req->uri);
-        }
 
         if (decode(req->uri, req->uriLen, req->decodeUri, sizeof(req->decodeUri)) <= 0)
         {

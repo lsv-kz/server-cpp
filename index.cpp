@@ -108,8 +108,8 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
             " </head>\r\n"
             " <body id=\"top\">\r\n"
             "  <h3>Index of " << req->decodeUri << "</h3>\r\n"
-            "  <table cols=\"2\" width=\"100\%\">\r\n"
-            "   <tr><td><h3>Directories</h3></td><td></td></tr>\r\n";
+            "  <table border=\"0\" width=\"100\%\">\r\n"
+            "   <tr><td><h3>Directories</h3></td></tr>\r\n";
     if (chunk_buf.error())
     {
         print_err("<%s:%d>   Error chunk\n", __func__, __LINE__);
@@ -117,9 +117,9 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
     }
     //------------------------------------------------------------------
     if (!strcmp(req->decodeUri, "/"))
-        chunk_buf << "   <tr><td></td><td></td></tr>\r\n";
+        chunk_buf << "   <tr><td></td></tr>\r\n";
     else
-        chunk_buf << "   <tr><td><a href=\"../\">Parent Directory/</a></td><td></td></tr>\r\n";
+        chunk_buf << "   <tr><td><a href=\"../\">Parent Directory/</a></td></tr>\r\n";
     if (chunk_buf.error())
     {
         print_err(req, "<%s:%d>   Error chunk\n", __func__, __LINE__);
@@ -141,7 +141,7 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
             continue;
         }
 
-        chunk_buf << "   <tr><td><a href=\"" << buf << "/\">" << list[i] << "/</a></td><td align=right></td></tr>\r\n";
+        chunk_buf << "   <tr><td><a href=\"" << buf << "/\">" << list[i] << "/</a></td></tr>\r\n";
         if (chunk_buf.error())
         {
             print_err(req, "<%s:%d>   Error chunk\n", __func__, __LINE__);
@@ -149,7 +149,7 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
         }
     }
     //------------------------------------------------------------------
-    chunk_buf << "  </table>\r\n   <hr>\r\n  <table cols=\"2\" width=\"100\%\">\r\n"
+    chunk_buf << "  </table>\r\n   <hr>\r\n  <table border=\"0\" width=\"100\%\">\r\n"
                 "   <tr><td><h3>Files</h3></td><td></td></tr>\r\n";
     if (chunk_buf.error())
     {
@@ -177,19 +177,13 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
         size = (long long)st.st_size;
 
         if (isimage(list[i]) && (conf->ShowMediaFiles == 'y'))
-        {
-            if (size < 15000LL)
-                chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\"></a></td><td align=\"left\">"
-                          << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
-            else
-                chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"300\"></a></td><td align=\"left\">"
-                          << list[i] << "</td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
-        }
+            chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"100\"></a>" << list[i] << "</td>"
+                          << "<td align=\"right\">" << size << " bytes</td></tr>\r\n";
         else if (isaudiofile(list[i]) && (conf->ShowMediaFiles == 'y'))
             chunk_buf << "   <tr><td><audio preload=\"none\" controls src=\"" << buf << "\"></audio><a href=\""
-                      << buf << "\"></td><td>" << list[i] << "</a></td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
+                      << buf << "\">" << list[i] << "</a></td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
         else
-            chunk_buf << "   <tr><td><a href=\"" << buf << "\">" << list[i] << "</a></td><td></td><td align=\"right\">" 
+            chunk_buf << "   <tr><td><a href=\"" << buf << "\">" << list[i] << "</a></td><td align=\"right\">" 
                       << size << " bytes</td></tr>\r\n";
         
         if (chunk_buf.error())

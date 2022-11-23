@@ -14,20 +14,16 @@ using namespace std;
 // push_pollout_list() >------------|                                        //
 //                                  |                                        //
 //                                  V                                        //
-// push_conn() -> [wait_list] -> [tmp_list] -> [work_list] -> end_response() //
+//                              [wait_list] -> [work_list] -> end_response() //
 //                                                                           //
-// [wait_list] - storage for connections waiting first request               //
+// [wait_list] - temporary storage                                           //
 // [work_list] - storage for working connections                             //
-// [tmp_list] - temporary storage                                            //
 //=============================================================================
-static Connect *wait_list_start = NULL;
-static Connect *wait_list_end = NULL;
-//----------------------------------------------------------------------
 static Connect *work_list_start = NULL;
 static Connect *work_list_end = NULL;
 
-static Connect *tmp_list_start = NULL;
-static Connect *tmp_list_end = NULL;
+static Connect *wait_list_start = NULL;
+static Connect *wait_list_end = NULL;
 
 static Connect **conn_array;
 static struct pollfd *pollfd_array;
@@ -38,7 +34,6 @@ static condition_variable cond_;
 static int close_thr = 0;
 static int size_buf;
 static char *snd_buf;
-static int work_conn = 0;
 //======================================================================
 int send_part_file(Connect *req)
 {
@@ -117,7 +112,7 @@ int send_part_file(Connect *req)
                 lseek(req->fd, -rd, SEEK_CUR);
                 return -EAGAIN;
             }
-            print_err(req, "<%s:%d> Error write(); %s\n", __func__, __LINE__, strerror(errno));
+            print_err(req, "<%s:%d> Error write(): %s\n", __func__, __LINE__, strerror(errno));
             return wr;
         }
         else if (rd != wr)
@@ -138,7 +133,7 @@ static void del_from_list(Connect *r)
         close(r->fd);
     else
         get_time(r->sLogTime);
-
+    
     if (r->prev && r->next)
     {
         r->prev->next = r->next;
@@ -161,22 +156,22 @@ static void del_from_list(Connect *r)
 int set_list()
 {
 mtx_.lock();
-    if (tmp_list_start)
+    if (wait_list_start)
     {
         if (work_list_end)
-            work_list_end->next = tmp_list_start;
+            work_list_end->next = wait_list_start;
         else
-            work_list_start = tmp_list_start;
+            work_list_start = wait_list_start;
         
-        tmp_list_start->prev = work_list_end;
-        work_list_end = tmp_list_end;
-        tmp_list_start = tmp_list_end = NULL;
+        wait_list_start->prev = work_list_end;
+        work_list_end = wait_list_end;
+        wait_list_start = wait_list_end = NULL;
     }
 mtx_.unlock();
 
+    int i = 0;
     time_t t = time(NULL);
     Connect *r = work_list_start, *next = NULL;
-    int i = 0;
     for ( ; r; r = next)
     {
         next = r->next;
@@ -191,10 +186,7 @@ mtx_.unlock();
                 r->reqHdValue[r->req_hd.iReferer] = "Timeout";
             }
             else
-            {
-                print_err(r, "<%s:%d> Timeout = %ld\n", __func__, __LINE__, t - r->sock_timer);
                 r->err = NO_PRINT_LOG;
-            }
 
             del_from_list(r);
             end_response(r);
@@ -344,40 +336,13 @@ void event_handler(RequestManager *ReqMan)
     {
         {
     unique_lock<mutex> lk(mtx_);
-            while ((!work_list_start) && (!tmp_list_start) && (!wait_list_start) && (!close_thr))
+            while ((!work_list_start) && (!wait_list_start) && (!close_thr))
             {
                 cond_.wait(lk);
             }
 
             if (close_thr)
                 break;
-            
-            while (work_conn < conf->MaxWorkConnections)
-            {
-                if (wait_list_start)
-                {
-                    Connect *r = wait_list_start;
-                
-                    if (wait_list_start == wait_list_end)
-                        wait_list_end = wait_list_start = NULL;
-                    else
-                        wait_list_start = wait_list_start->next;
-
-                    r->next = NULL;
-                    r->prev = tmp_list_end;
-                    if (tmp_list_start)
-                    {
-                        tmp_list_end->next = r;
-                        tmp_list_end = r;
-                    }
-                    else
-                        tmp_list_start = tmp_list_end = r;
-
-                    ++work_conn;
-                }
-                else
-                    break;
-            }
         }
         
         count_resp = set_list();
@@ -412,7 +377,7 @@ void event_handler(RequestManager *ReqMan)
     if (conf->SendFile != 'y')
 #endif
         if (snd_buf) delete [] snd_buf;
-    print_err("*** Exit [%s:proc=%d] ***\n", __func__, num_chld);
+    //print_err("*** Exit [%s:proc=%d] ***\n", __func__, num_chld);
 }
 //======================================================================
 void push_pollout_list(Connect *req)
@@ -422,38 +387,19 @@ void push_pollout_list(Connect *req)
     req->sock_timer = 0;
     req->next = NULL;
 mtx_.lock();
-    req->prev = tmp_list_end;
-    if (tmp_list_start)
+    req->prev = wait_list_end;
+    if (wait_list_start)
     {
-        tmp_list_end->next = req;
-        tmp_list_end = req;
+        wait_list_end->next = req;
+        wait_list_end = req;
     }
     else
-        tmp_list_start = tmp_list_end = req;
+        wait_list_start = wait_list_end = req;
 mtx_.unlock();
     cond_.notify_one();
 }
 //======================================================================
 void push_pollin_list(Connect *req)
-{
-    req->init();
-    req->event = POLLIN;
-    req->sock_timer = 0;
-    req->next = NULL;
-mtx_.lock();
-    req->prev = tmp_list_end;
-    if (tmp_list_start)
-    {
-        tmp_list_end->next = req;
-        tmp_list_end = req;
-    }
-    else
-        tmp_list_start = tmp_list_end = req;
-mtx_.unlock();
-    cond_.notify_one();
-}
-//======================================================================
-void push_conn(Connect *req)
 {
     req->init();
     req->event = POLLIN;
@@ -467,16 +413,9 @@ mtx_.lock();
         wait_list_end = req;
     }
     else
-        wait_list_end = wait_list_start = req;
+        wait_list_start = wait_list_end = req;
 mtx_.unlock();
     cond_.notify_one();
-}
-//======================================================================
-void dec_work_conn()
-{
-mtx_.lock();
-    --work_conn;
-mtx_.unlock();
 }
 //======================================================================
 void close_event_handler(void)

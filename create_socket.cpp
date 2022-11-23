@@ -100,7 +100,7 @@ int create_fcgi_socket(const char *host)
         if (inet_aton(addr, &(sock_addr.sin_addr)) == 0)
 //      if (inet_pton(AF_INET, addr, &(sock_addr.sin_addr)) < 1)
         {
-            fprintf(stderr, "   Error inet_pton(%s): %s\n", addr, strerror(errno));
+            print_err("<%s:%d> Error inet_pton(%s): %s\n", __func__, __LINE__, addr, strerror(errno));
             close(sockfd);
             return -errno;
         }

@@ -110,13 +110,12 @@ struct Config
     char SendFile;
     int SndBufSize;
 
-    int ReserveConnections;
+    int HysteresisConnections;
     int MaxWorkConnections;
-    int MaxConnections;
-    
     int MaxEventConnections;
-    
+
     unsigned int NumProc;
+    unsigned int MaxNumProc;
     unsigned int MaxThreads;
     unsigned int MinThreads;
     unsigned int MaxCgiProc;
@@ -210,7 +209,7 @@ public:
     char      *uri;
     unsigned int uriLen;
     //------------------------------------------------------------------
-    char      *sReqParam;
+    const char *sReqParam;
     char      *sRange;
 
     int       reqMethod;
@@ -250,7 +249,7 @@ public:
 
     void init();
     int hd_read();
-    int empty_line();
+    int find_empty_line();
 };
 //----------------------------------------------------------------------
 class RequestManager
@@ -298,8 +297,6 @@ int index_dir(Connect *req, std::string& path);
 int cgi(Connect *req);
 int fcgi(Connect *req);
 int create_fcgi_socket(const char *host);
-
-pid_t create_child(int sock, unsigned int num_chld, int *pfd, int fd_close);
 //----------------------------------------------------------------------
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);
@@ -358,8 +355,6 @@ void end_response(Connect *req);
 void event_handler(RequestManager *ReqMan);
 void push_pollin_list(Connect *req);
 void push_pollout_list(Connect *req);
-void push_conn(Connect *req);
-void dec_work_conn();
 void close_event_handler();
 //----------------------------------------------------------------------
 int set_max_fd(int max_open_fd);
