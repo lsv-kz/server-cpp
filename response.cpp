@@ -172,10 +172,24 @@ int fastcgi(Connect* req, const char* uri)
 
     if (!i)
         return -RS404;
-    req->scriptType = fast_cgi;
-    req->scriptName = i->script_name.c_str();
-    int ret = fcgi(req);
-    req->scriptName = NULL;
+
+    int ret;
+    if (i->type == fast_cgi)
+    {
+        req->scriptType = fast_cgi;
+        req->scriptName = i->script_name.c_str();
+        ret = fcgi(req);
+        req->scriptName = NULL;
+    }
+    else if (i->type == s_cgi)
+    {
+        req->scriptType = s_cgi;
+        req->scriptName = i->script_name.c_str();
+        ret = scgi(req);
+        req->scriptName = NULL;
+    }
+    else
+        ret = -1;
     return ret;
 }
 //======================================================================

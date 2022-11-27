@@ -388,9 +388,9 @@ int main_proc()
 
         if (status == PROC_CLOSE)
         {
-			print_err("<%s:%d> read(): %d, from proc: %u\n", __func__, __LINE__, (int)status, num_create_proc - 1);
+            print_err("<%s:%d> read(): %d, from proc: %u\n", __func__, __LINE__, (int)status, num_create_proc - 1);
             break;
-		}
+        }
         else if ((status == CONNECT_ALLOW) && (num_create_proc < conf->MaxNumProc))
         {
             pid_ = create_child(sockServer, num_create_proc, &pfd_in, pfd[1], CONNECT_ALLOW);

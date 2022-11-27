@@ -178,7 +178,7 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
 
         if (isimage(list[i]) && (conf->ShowMediaFiles == 'y'))
             chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"100\"></a>" << list[i] << "</td>"
-                          << "<td align=\"right\">" << size << " bytes</td></tr>\r\n";
+                      << "<td align=\"right\">" << size << " bytes</td></tr>\r\n";
         else if (isaudiofile(list[i]) && (conf->ShowMediaFiles == 'y'))
             chunk_buf << "   <tr><td><audio preload=\"none\" controls src=\"" << buf << "\"></audio><a href=\""
                       << buf << "\">" << list[i] << "</a></td><td align=\"right\">" << size << " bytes</td></tr>\r\n";

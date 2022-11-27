@@ -249,37 +249,6 @@ long fcgi_to_cosmos(int fd_in, unsigned int size, int timeout)
     return wr_bytes;
 }
 //======================================================================
-int script_to_file(int fd_in, int fd_out, int cont_len, int timeout)
-{
-    int all_wr_bytes = 0;
-    int rd, wr;
-    char buf[512];
-
-    for ( ; cont_len > 0; )
-    {
-        rd = read_timeout(fd_in, buf, cont_len > (int)sizeof(buf) ? (int)sizeof(buf) : cont_len, timeout);
-        if (rd == -1)
-        {
-            if (errno == EINTR)
-                continue;
-            print_err("<%s:%d> Error read_timeout()\n", __func__, __LINE__);
-            return -1;
-        }
-        else if (rd == 0)
-            break;
-
-        cont_len -= rd;
-
-        wr = write(fd_out, buf, rd);
-        if (wr != rd)
-            return -1;
-
-        all_wr_bytes += rd;
-    }
-
-    return all_wr_bytes;
-}
-//======================================================================
 int fcgi_read_stderr(int fd_in, int cont_len, int timeout)
 {
     int wr_bytes = 0;
