@@ -59,16 +59,16 @@ public://===============================================================
             int len_name = strlen(name);
             if ((offset_out + len_name) < size_buf)
             {
-				memcpy(scgi_buf + offset_out, name, len_name);
-				offset_out += len_name;
-				*(scgi_buf + offset_out) = 0;
-				offset_out++;
-			}
-			else
-			{
-				err = 1;
-				return;
-			}
+                memcpy(scgi_buf + offset_out, name, len_name);
+                offset_out += len_name;
+                *(scgi_buf + offset_out) = 0;
+                offset_out++;
+            }
+            else
+            {
+                err = 1;
+                return;
+            }
         }
         else
         {
@@ -81,29 +81,29 @@ public://===============================================================
             int len_val = strlen(val);
             if ((offset_out + len_val) < size_buf)
             {
-				memcpy(scgi_buf + offset_out, val, len_val);
-				offset_out += len_val;
-				*(scgi_buf + offset_out) = 0;
-				offset_out++;
-			}
-			else
-			{
-				err = 1;
-				return;
-			}
+                memcpy(scgi_buf + offset_out, val, len_val);
+                offset_out += len_val;
+                *(scgi_buf + offset_out) = 0;
+                offset_out++;
+            }
+            else
+            {
+                err = 1;
+                return;
+            }
         }
         else
         {
             if ((offset_out + 1) < size_buf)
             {
-				*(scgi_buf + offset_out) = 0;
-				offset_out++;
-			}
-			else
-				err = 1;
+                *(scgi_buf + offset_out) = 0;
+                offset_out++;
+            }
+            else
+                err = 1;
         }
     }
-	//==================================================================
+    //==================================================================
     void SCGI_client::add(const char *name, const char *val, int len)
     {
         if (err)
@@ -128,10 +128,10 @@ public://===============================================================
             int len_val = strlen(val);
             if (len > len_val)
             {
-				err = 1;
-				return;
-			}
-			
+                err = 1;
+                return;
+            }
+            
             memcpy(scgi_buf + offset_out, val, len);
             offset_out += len;
             *(scgi_buf + offset_out) = 0;
@@ -158,12 +158,12 @@ public://===============================================================
 
         scgi_buf[offset_out++] = ',';
         if (scgi_send(scgi_buf + i, offset_out - i) < 0)
-			return -1;
+            return -1;
 
         return offset_out;
     }
-	//==================================================================
-	int SCGI_client::scgi_send(const char *data, int size)
+    //==================================================================
+    int SCGI_client::scgi_send(const char *data, int size)
     {
         if (err)
             return -1;
@@ -193,7 +193,7 @@ public://===============================================================
             
             if (fdwr.revents != POLLOUT)
             {
-				err = 1;
+                err = 1;
                 ret = -1;
                 break;
             }
@@ -216,12 +216,12 @@ public://===============================================================
         {
             err = 1;
             ret = -1;
-		}
+        }
         else
         {
             all_send += write_bytes;
             ret = all_send;
-		}
+        }
         offset_out = 0;
         
         return ret;
@@ -229,16 +229,16 @@ public://===============================================================
     //==================================================================
     int SCGI_client::scgi_read(char *buf, int size)
     {
-		int read_bytes = 0;
-		struct pollfd fdrd;
-		char *p = buf;
-		
-		fdrd.fd = scgi_sock;
+        int read_bytes = 0;
+        struct pollfd fdrd;
+        char *p = buf;
+        
+        fdrd.fd = scgi_sock;
         fdrd.events = POLLIN;
         
         while (size > 0)
         {
-			int ret = poll(&fdrd, 1, TimeoutCGI * 1000);
+            int ret = poll(&fdrd, 1, TimeoutCGI * 1000);
             if (ret == -1)
             {
                 if (errno == EINTR)
@@ -257,12 +257,12 @@ public://===============================================================
                 ret = read(scgi_sock, p, size);
                 if (ret < 0)
                 {
-					fprintf(stderr, "Error read(): %s\n", strerror(errno));
+                    fprintf(stderr, "Error read(): %s\n", strerror(errno));
                     err = 1;
                     return -1;
                 }
                 else if (ret == 0)
-					break;
+                    break;
                 else
                 {
                     p += ret;
@@ -270,9 +270,9 @@ public://===============================================================
                     read_bytes += ret;
                 }
             }
-		}
+        }
 
-		return read_bytes;
-	}
+        return read_bytes;
+    }
 
 #endif

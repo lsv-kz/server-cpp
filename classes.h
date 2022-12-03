@@ -126,7 +126,7 @@ class ClChunked
             len = offset;
         }
 
-        int ret = write_to_client(req, p, len, conf->Timeout);
+        int ret = write_timeout(req->clientSocket, p, len, conf->Timeout);
 
         offset = 0;
         if (ret > 0)

@@ -77,18 +77,10 @@ enum { EXIT_THR = 1 };
 const int NO_PRINT_LOG = -1000;
 
 void print_err(const char *format, ...);
-/* ---------------------------------------------------------------------
- *                  Commands send to next process
- * CONNECT_IGN    : The next process MUST NOT receive requests from the client
- * CONNECT_ALLOW  : The next process MAY receive requests from client
- * PROC_CLOSE     : Close next process
- */
-enum { CONNECT_IGN, CONNECT_ALLOW, PROC_CLOSE };
 //----------------------------------------------------------------------
 struct Config
 {
     std::string ServerSoftware;
-
     std::string ServerAddr;
     std::string ServerPort;
 
@@ -103,16 +95,16 @@ struct Config
     int ListenBacklog;
     char tcp_cork;
     char tcp_nodelay;
-    
+
     char SendFile;
     int SndBufSize;
 
-    int HysteresisConnections;
+    unsigned int NumCpuCores;
+
     int MaxWorkConnections;
     int MaxEventConnections;
 
     unsigned int NumProc;
-    unsigned int MaxNumProc;
     unsigned int MaxThreads;
     unsigned int MinThreads;
     unsigned int MaxCgiProc;
@@ -146,11 +138,10 @@ struct Config
     {
         fcgi_list = NULL;
     }
-
+    //------------------------------------------------------------------
     ~Config()
     {
         free_fcgi_list();
-        //std::cout << __func__ << " ******* " << getpid() << " *******\n";
     }
 
     void free_fcgi_list()
@@ -171,39 +162,39 @@ extern const Config* const conf;
 class Connect
 {
 public:
-    Connect *prev;
-    Connect *next;
-    static int serverSocket;
+    Connect  *prev;
+    Connect  *next;
+    static int  serverSocket;
 
-    unsigned int numProc, numConn, numReq;
-    int       clientSocket;
-    int       err;
-    time_t    sock_timer;
-    int       timeout;
-    int       event;
+    unsigned int  numProc, numConn, numReq;
+    int  clientSocket;
+    int  err;
+    time_t  sock_timer;
+    int  timeout;
+    int  event;
 
-    char      remoteAddr[NI_MAXHOST];
-    char      remotePort[NI_MAXSERV];
+    char  remoteAddr[NI_MAXHOST];
+    char  remotePort[NI_MAXSERV];
 
-    char      bufReq[SIZE_BUF_REQUEST];
-    int       lenBufReq;
-    char      *p_newline;
+    char  bufReq[SIZE_BUF_REQUEST];
+    int  lenBufReq;
+    char  *p_newline;
 
-    char      *tail;
-    int       lenTail;
+    char  *tail;
+    int  lenTail;
 
-    char      decodeUri[SIZE_BUF_REQUEST];
-    unsigned int lenDecodeUri;
+    char  decodeUri[SIZE_BUF_REQUEST];
+    unsigned int  lenDecodeUri;
 
-    char      *uri;
-    unsigned int uriLen;
+    char  *uri;
+    unsigned int  uriLen;
     //------------------------------------------------------------------
-    const char *sReqParam;
-    char      *sRange;
+    const char  *sReqParam;
+    char  *sRange;
 
-    int       reqMethod;
-    int       httpProt;
-    int       connKeepAlive;
+    int  reqMethod;
+    int  httpProt;
+    int  connKeepAlive;
 
     struct
     {
@@ -217,24 +208,24 @@ public:
         int  iAcceptEncoding;
         int  iRange;
         int  iIfRange;
-        long long reqContentLength;
+        long long  reqContentLength;
     } req_hd;
 
     int  countReqHeaders;
     char  *reqHdName[MAX_HEADERS + 1];
     const char  *reqHdValue[MAX_HEADERS + 1];
     //--------------------------------------
-    std::string sLogTime;
-    int respStatus;
-    int scriptType;
-    const char *scriptName;
-    int numPart;
-    long long respContentLength;
-    const char *respContentType;
-    long long fileSize;
-    int fd;
-    off_t offset;
-    long long send_bytes;
+    std::string  sLogTime;
+    int  respStatus;
+    int  scriptType;
+    const char  *scriptName;
+    int  numPart;
+    long long  respContentLength;
+    const char  *respContentType;
+    long long  fileSize;
+    int  fd;
+    off_t  offset;
+    long long  send_bytes;
 
     void init();
     int hd_read();
@@ -273,8 +264,6 @@ public:
     int end_thr(int);
     int wait_create_thr(int*);
     void close_manager();
-
-    void print_intr();
 };
 //----------------------------------------------------------------------
 extern char **environ;
@@ -286,25 +275,27 @@ int index_dir(Connect *req, std::string& path);
 int cgi(Connect *req);
 int fcgi(Connect *req);
 int scgi(Connect *req);
+//----------------------------------------------------------------------
 int create_fcgi_socket(const char *host);
+int unixBind(const char *path, int type);
+int unixConnect(const char *path, int type);
 //----------------------------------------------------------------------
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);
 //----------------------------------------------------------------------
 int read_timeout(int fd, char *buf, int len, int timeout);
+int write_timeout(int fd, const char *buf, int len, int timeout);
 
-int write_to_client(Connect *req, const char *buf, int len, int timeout);
-int write_to_script(int fd, const char *buf, int len, int timeout);
-
-int client_to_script(Connect *req, int fd_out, long long *cont_len);
+int client_to_cgi(int fd_in, int fd_out, long long *cont_len);
 void client_to_cosmos(Connect *req, long long *size);
-
 long cgi_to_cosmos(int fd_in, int timeout);
+
 long fcgi_to_cosmos(int fd_in, unsigned int size, int timeout);
 
-int fcgi_read_stderr(int fd, int cont_len, int timeout);
-
 int send_largefile(Connect *req, char *buf, int size, off_t offset, long long *cont_len);
+
+int send_fd(int unix_sock, int fd, void *data, int size_data);
+int recv_fd(int unix_sock, int num_chld, void *data, int *size_data);
 //----------------------------------------------------------------------
 void send_message(Connect *req, const char *msg, const String *);
 int send_response_headers(Connect *req, const String *hdrs);

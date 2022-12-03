@@ -140,3 +140,72 @@ int create_fcgi_socket(const char *host)
 
     return sockfd;
 }
+//======================================================================
+int unixBind(const char *path, int type)
+{
+    struct sockaddr_un addr;
+
+    if (path == NULL || strlen(path) >= sizeof(addr.sun_path) - 1)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+    
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    if (strlen(path) < sizeof(addr.sun_path))
+        strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+    else
+    {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    int sock = socket(AF_UNIX, type, 0);
+    if (sock == -1)
+        return -1;
+
+    if (bind(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1)
+    {
+        fprintf(stderr, "<%s:%d> Error bind(): %s\n", __func__, __LINE__, strerror(errno));
+        close(sock);
+        return -1;
+    }
+
+    return sock;
+}
+//======================================================================
+int unixConnect(const char *path, int type)
+{
+    int sock;
+    struct sockaddr_un addr;
+
+    if (path == NULL || strlen(path) >= sizeof(addr.sun_path) - 1)
+    {
+        errno = EINVAL;
+        return -1;
+    }
+    
+    memset(&addr, 0, sizeof(struct sockaddr_un));
+    addr.sun_family = AF_UNIX;
+    if (strlen(path) < sizeof(addr.sun_path))
+        strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
+    else
+    {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+
+    sock = socket(AF_UNIX, type, 0);
+    if (sock == -1)
+        return -1;
+
+    if (connect(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1)
+    {
+        fprintf(stderr, "<%s:%d> Error connect(): %s\n", __func__, __LINE__, strerror(errno));
+        close(sock);
+        return -1;
+    }
+
+    return sock;
+}

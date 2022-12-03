@@ -4,7 +4,7 @@ using namespace std;
 
 static mutex mtx_conn;
 static condition_variable cond_close_conn;
-static int num_conn = 0, all_req = 0;
+static int count_conn = 0, all_req = 0;
 //======================================================================
 RequestManager::RequestManager(unsigned int n)
 {
@@ -121,6 +121,7 @@ mtx_thr.unlock();
     {
         cond_exit_thr.notify_all();
     }
+
     return ret;
 }
 //----------------------------------------------------------------------
@@ -132,40 +133,32 @@ void RequestManager::close_manager()
     cond_list.notify_all();
 }
 //======================================================================
-void start_conn()
+int get_num_conn()
 {
-mtx_conn.lock();
-    ++num_conn;
-mtx_conn.unlock();
+lock_guard<std::mutex> lg(mtx_conn);
+    return count_conn;
 }
 //======================================================================
-void wait_close_conn()
+int wait_close_conn()
 {
 unique_lock<mutex> lk(mtx_conn);
-    while (num_conn >= (conf->MaxWorkConnections - conf->HysteresisConnections))
+    while (count_conn >= conf->MaxWorkConnections)
     {
         cond_close_conn.wait(lk);
     }
+    return 0;
 }
 //======================================================================
-int is_maxconn()
+int start_conn()
 {
 mtx_conn.lock();
-    int n = 0;
-    if (num_conn >= conf->MaxWorkConnections)
-        n = 1;
+    int ret = (++count_conn);
 mtx_conn.unlock();
-    return n;
+    return ret;
 }
 //======================================================================
-void wait_close_all_conn()
-{
-unique_lock<mutex> lk(mtx_conn);
-    while (num_conn > 0)
-    {
-        cond_close_conn.wait(lk);
-    }
-}
+static int fd_close_conn;
+static int nProc;
 //======================================================================
 void end_response(Connect *req)
 {
@@ -173,7 +166,7 @@ void end_response(Connect *req)
     { // ----- Close connect -----
         if (req->err > NO_PRINT_LOG)// 0 > err > NO_PRINT_LOG(-1000)
         {
-            if (req->err < -1)// -1 > err > NO_PRINT_LOG(-1000)
+            if (req->err <= -RS101)// -1 > err > NO_PRINT_LOG(-1000)
             {
                 req->respStatus = -req->err;
                 send_message(req, NULL, NULL);
@@ -186,8 +179,14 @@ void end_response(Connect *req)
         delete req;
 
     mtx_conn.lock();
-        --num_conn;
+        --count_conn;
     mtx_conn.unlock();
+        char ch = nProc;
+        if (write(fd_close_conn, &ch, 1) <= 0)
+        {
+            print_err("<%s:%d> Error write(): %s\n", __func__, __LINE__, strerror(errno));
+            exit(1);
+        }
         cond_close_conn.notify_all();
     }
     else
@@ -238,87 +237,113 @@ void thr_create_manager(int numProc, RequestManager *ReqMan)
     //print_err("[%d] <%s:%d> *** Exit thread_req_manager() ***\n", numProc, __func__, __LINE__);
 }
 //======================================================================
-static unsigned int nProc;
-static RequestManager *RM;
-static unsigned long allConn = 0;
+int servSock, unSock;
+RequestManager *RM;
+unsigned long allConn = 0;
 //======================================================================
 static void signal_handler_child(int sig)
 {
     if (sig == SIGINT)
     {
-        //print_err("[%d] <%s:%d> ### SIGINT ### all_req=%d\n", nProc, __func__, __LINE__, all_req);
+        print_err("[%d]<%s:%d> ### SIGINT ### all_req=%d\n", nProc, __func__, __LINE__, all_req);
+        shutdown(servSock, SHUT_RDWR);
+        close(servSock);
     }
     else if (sig == SIGTERM)
     {
-        print_err("<main> ####### SIGTERM #######\n");
-        exit(0);
+        signal(SIGCHLD, SIG_IGN);
+        print_err("[%d]<%s:%d> ####### SIGTERM #######\n", nProc, __func__, __LINE__);
+        shutdown(unSock, SHUT_RDWR);
+        close(unSock);
     }
     else if (sig == SIGSEGV)
     {
-        print_err("[%d] <%s:%d> ### SIGSEGV ###\n", nProc, __func__, __LINE__);
+        print_err("[%d]<%s:%d> ### SIGSEGV ###\n", nProc, __func__, __LINE__);
+        shutdown(unSock, SHUT_RDWR);
+        close(unSock);
+        shutdown(servSock, SHUT_RDWR);
+        close(servSock);
         exit(1);
     }
     else if (sig == SIGUSR1)
-        print_err("[%d] <%s:%d> ### SIGUSR1 ###\n", nProc, __func__, __LINE__);
+    {
+        print_err("[%d]<%s:%d> ### SIGUSR1 ###\n", nProc, __func__, __LINE__);
+    }
+    else if (sig == SIGUSR1)
+    {
+        print_err("[%d]<%s:%d> ### SIGUSR1 ###\n", nProc, __func__, __LINE__);
+    }
     else
-        print_err("[%d] <%s:%d> sig=%d\n", nProc, __func__, __LINE__, sig);
+        print_err("[%d]<%s:%d> ### SIG=%d ###\n", nProc, __func__, __LINE__, sig);
 }
 //======================================================================
 Connect *create_req();
-int write_(int fd, char *data, int size);
-int read_(int fd, char *data, int size);
+int create_unix_server_socket(const char *path);
+void set_max_conn(int n);
+int set_max_fd(int max_open_fd);
 //======================================================================
-void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char sig)
+void manager(int sockServer, int numProc, int to_parent)
 {
+    String namePath;
+    namePath << "unix_sock_" << getpid() << "_"  << numProc;
+    int unixSock = unixBind(namePath.c_str(), SOCK_DGRAM);
+    if (unixSock == -1)
+    {
+        print_err("[%u]<%s:%d> Error unixBind()=%d\n", numProc, __func__, __LINE__, unixSock);
+        return;
+    }
+
+    unSock = unixSock;
+
     RequestManager *ReqMan = new(nothrow) RequestManager(numProc);
     if (!ReqMan)
     {
-        print_err("<%s:%d> *********** Exit child %u ***********\n", __func__, __LINE__, numProc);
+        print_err("<%s:%d> *********** Exit child %d ***********\n", __func__, __LINE__, numProc);
         close_logs();
         exit(1);
     }
 
+    fd_close_conn = to_parent;
     nProc = numProc;
+    servSock = sockServer;
     RM = ReqMan;
     //------------------------------------------------------------------
-    printf("[%u] +++++ num threads=%u, pid=%u, uid=%u, gid=%u +++++\n", numProc,
-                                ReqMan->get_num_thr(), getpid(), getuid(), getgid());
-    //------------------------------------------------------------------
-    signal(SIGUSR2, SIG_IGN);
-
     if (signal(SIGINT, signal_handler_child) == SIG_ERR)
     {
-        print_err("[%d] <%s:%d> Error signal(SIGINT): %s\n", numProc, __func__, __LINE__, strerror(errno));
+        print_err("<%s:%d> Error signal(SIGINT): %s\n", __func__, __LINE__, strerror(errno));
         exit(EXIT_FAILURE);
     }
 
     if (signal(SIGSEGV, signal_handler_child) == SIG_ERR)
     {
-        print_err("[%d] <%s:%d> Error signal(SIGSEGV): %s\n", numProc, __func__, __LINE__, strerror(errno));
+        print_err("<%s:%d> Error signal(SIGSEGV): %s\n", __func__, __LINE__, strerror(errno));
         exit(EXIT_FAILURE);
     }
 
-    if ((numProc + 1) < conf->NumProc)
+    if (signal(SIGTERM, signal_handler_child) == SIG_ERR)
     {
-        if (signal(SIGTERM, signal_handler_child) == SIG_ERR)
-        {
-            fprintf(stderr, "<%s:%d> Error signal(SIGTERM): %s\n", __func__, __LINE__, strerror(errno));
-            exit(EXIT_FAILURE);
-        }
+        fprintf(stderr, "<%s:%d> Error signal(SIGTERM): %s\n", __func__, __LINE__, strerror(errno));
+        exit(EXIT_FAILURE);
     }
 
     if (signal(SIGUSR1, signal_handler_child) == SIG_ERR)
     {
-        print_err("[%d] <%s:%d> Error signal(SIGUSR1): %s\n", numProc, __func__, __LINE__, strerror(errno));
+        print_err("<%s:%d> Error signal(SIGUSR1): %s\n", __func__, __LINE__, strerror(errno));
+        exit(EXIT_FAILURE);
+    }
+
+    if (signal(SIGUSR2, signal_handler_child) == SIG_ERR)
+    {
+        print_err("[%d] <%s:%d> Error signal(SIGUSR2): %s\n", numProc, __func__, __LINE__, strerror(errno));
         exit(EXIT_FAILURE);
     }
     //------------------------------------------------------------------
     if (chdir(conf->DocumentRoot.c_str()))
     {
         print_err("[%d] <%s:%d> Error chdir(%s): %s\n", numProc, __func__, __LINE__, conf->DocumentRoot.c_str(), strerror(errno));
-        exit(EXIT_FAILURE);
+        exit(1);
     }
-    //------------------------------------------------------------------
+    //----------------------------------------
     thread EventHandler;
     try
     {
@@ -360,152 +385,69 @@ void manager(int sockServer, unsigned int numProc, int fd_in, int fd_out, char s
                 __LINE__, ReqMan->get_all_thr(), errno);
         exit(errno);
     }
-    //------------------------------------------------------------------
-    static struct pollfd fdrd[2];
-    fdrd[0].fd = fd_in;
-    fdrd[0].events = POLLIN;
-
-    fdrd[1].fd = sockServer;
-    fdrd[1].events = POLLIN;
-
-    char status = sig, child_status = CONNECT_IGN;
-    int num_fd = 1;
+    //------------------------------------------------------------------    
+    printf("[%d] +++++ num threads=%d, pid=%d, uid=%d, gid=%d  +++++\n", numProc, 
+                            ReqMan->get_num_thr(), getpid(), getuid(), getgid());
 
     while (1)
     {
         struct sockaddr_storage clientAddr;
         socklen_t addrSize = sizeof(struct sockaddr_storage);
-
-        if (status == CONNECT_IGN)
-        {
-            num_fd = 1;// poll(): only pipe[in]
-
-            if (child_status == CONNECT_ALLOW)
-            {
-                print_err("[%d] <%s:%d> \"We are not here. It is not us.\"\n", numProc, __func__, __LINE__);
-                child_status = PROC_CLOSE;
-                write_(fd_out, &child_status, sizeof(child_status));
-                break;
-            }
-        }
-        else if (status == CONNECT_ALLOW)
-        {
-            num_fd = 2;// poll(): pipe[in] and listen socket
-
-            if (is_maxconn())
-            {//------ the number of connections is the maximum ---------
-                // Allow connections next worker process
-                child_status = CONNECT_ALLOW;
-                if (write_(fd_out, &child_status, sizeof(child_status)) < 0)
-                    break;
-
-                wait_close_conn(); // wait (num_conn < (MaxConnections - HysteresisConnections))
-
-                // Do not allow connections next process
-                child_status = CONNECT_IGN;
-                if (write_(fd_out, &child_status, sizeof(child_status)) < 0)
-                    break;
-            }
-        }
-
-        int ret_poll = poll(fdrd, num_fd, -1);
-        if (ret_poll <= 0)
-        {
-            if (errno == EINTR)
-                continue;
-            print_err("[%d] <%s:%d> Error poll()=-1: %s\n", numProc, __func__, __LINE__, strerror(errno));
-            break;
-        }
-
-        if (fdrd[0].revents == POLLIN)
-        {
-            --ret_poll;
-
-            if (read_(fd_in, &status, sizeof(status)) <= 0)
-            {
-                print_err("[%d] <%s:%d> Error read(): %s\n", numProc, __func__, __LINE__, strerror(errno));
-                break;
-            }
-
-            if (status == PROC_CLOSE)
-            {
-                // Close next process
-                write_(fd_out, &status, sizeof(status));
-                break;
-            }
-
-            continue;
-        }
+        char data[1] = "";
+        int sz = sizeof(data);
         
-        if ((fdrd[1].revents == POLLIN) && status)
+        int clientSocket = recv_fd(unixSock, numProc, data, (int*)&sz);
+        if (clientSocket < 0)
         {
-            --ret_poll;
-
-            int clientSocket = accept(sockServer, (struct sockaddr *)&clientAddr, &addrSize);
-            if (clientSocket == -1)
-            {
-                if ((errno == EAGAIN) || (errno == EINTR) || (errno == EMFILE))
-                    continue;
-                print_err("[%d] <%s:%d>  Error accept(): %s\n", numProc, __func__, __LINE__, strerror(errno));
-                break;
-            }
-
-            Connect *req;
-            req = create_req();
-            if (!req)
-            {
-                shutdown(clientSocket, SHUT_RDWR);
-                close(clientSocket);
-                break;
-            }
-
-            int opt = 1;
-            ioctl(clientSocket, FIONBIO, &opt);
-
-            req->numProc = numProc;
-            req->numConn = ++allConn;
-            req->numReq = 1;
-            req->clientSocket = clientSocket;
-            req->timeout = conf->Timeout;
-            n = getnameinfo((struct sockaddr *)&clientAddr,
-                    addrSize,
-                    req->remoteAddr,
-                    sizeof(req->remoteAddr),
-                    req->remotePort,
-                    sizeof(req->remotePort),
-                    NI_NUMERICHOST | NI_NUMERICSERV);
-            if (n != 0)
-                print_err(req, "<%s> Error getnameinfo()=%d: %s\n", __func__, n, gai_strerror(n));
-
-            start_conn();
-            push_pollin_list(req);
-        }
-
-        if (ret_poll)
-        {
-            print_err("[%d] <%s:%d>  Error: pipe revents=0x%x; socket revents=0x%x\n", 
-                        numProc, __func__, __LINE__, fdrd[0].revents, fdrd[1].revents);
+            print_err("[%d]<%s:%d> Error recv_fd()\n", numProc, __func__, __LINE__);
             break;
         }
+
+        Connect *req;
+        req = create_req();
+        if (!req)
+        {
+            shutdown(clientSocket, SHUT_RDWR);
+            close(clientSocket);
+            break;
+        }
+
+        int opt = 1;
+        ioctl(clientSocket, FIONBIO, &opt);
+
+        req->numProc = numProc;
+        req->numConn = ++allConn;
+        req->numReq = 1;
+        req->clientSocket = clientSocket;
+        req->timeout = conf->Timeout;
+        req->remoteAddr[0] = '\0';
+        getpeername(clientSocket,(struct sockaddr *)&clientAddr, &addrSize);
+        n = getnameinfo((struct sockaddr *)&clientAddr, 
+                addrSize, 
+                req->remoteAddr, 
+                sizeof(req->remoteAddr),
+                req->remotePort, 
+                sizeof(req->remotePort), 
+                NI_NUMERICHOST | NI_NUMERICSERV);
+        if (n != 0)
+            print_err(req, "<%s> Error getnameinfo()=%d: %s\n", __func__, n, gai_strerror(n));
+
+        start_conn();
+        push_pollin_list(req);// --- First request ---
     }
 
-    wait_close_all_conn();
+    print_err("<%d> <%s:%d>  numThr=%d; allNumThr=%u; all_req=%u; open_conn=%d\n", numProc, 
+                    __func__, __LINE__, ReqMan->get_num_thr(), ReqMan->get_all_thr(), all_req, get_num_conn());
 
-    shutdown(sockServer, SHUT_RDWR);
-    close(sockServer);
-
-    n = ReqMan->get_num_thr();
-    print_err("[%d] <%s:%d>  numThr=%d; allNumThr=%u; all_req=%u; open_conn=%d\n", numProc, 
-                    __func__, __LINE__, n, ReqMan->get_all_thr(), all_req, num_conn);
     ReqMan->close_manager();
-    close_event_handler();
-
     thrReqMan.join();
+
+    close_event_handler();
     EventHandler.join();
 
-    usleep(100000);
-    close(fd_out);
+    close(unixSock);
 
+    usleep(100000);
     delete ReqMan;
 }
 //======================================================================
@@ -515,35 +457,4 @@ Connect *create_req(void)
     if (!req)
         print_err("<%s:%d> Error malloc(): %s\n", __func__, __LINE__, str_err(errno));
     return req;
-}
-//======================================================================
-int write_(int fd, char *data, int size)
-{
-    int ret, err;
-a1: 
-    ret = write(fd, data, size);
-    if (ret < 0)
-    {
-        err = errno;
-        if (err == EINTR)
-            goto a1;
-        print_err("<%s:%d> Error write(): %s\n", __func__, __LINE__, strerror(err));
-    }
-    return ret;
-}
-//======================================================================
-int read_(int fd, char *data, int size)
-{
-    int ret, err;
-a1: 
-    ret = read(fd, data, size);
-    if (ret < 0)
-    {
-        err = errno;
-        if (err == EINTR)
-            goto a1;
-        print_err("<%s:%d> Error write(): %s\n", __func__, __LINE__, strerror(err));
-    }
-
-    return ret;
 }
