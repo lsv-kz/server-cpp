@@ -13,7 +13,7 @@ int encode(const char *s_in, char *s_out, int len_out)
 
     if((!s_in) || (!s_out))
         return 0;
-    
+
     while((c = *s_in++))
     {
         if(c <= 0x7f)
@@ -106,7 +106,7 @@ int decode(const char *s_in, int len_in, char *s_out, int len)
                 *p = 0;
                 return 0;
             }
-            
+
             tmp[0] = *(s_in++);
             tmp[1] = *(s_in++);
             tmp[2] = 0;
@@ -119,7 +119,7 @@ int decode(const char *s_in, int len_in, char *s_out, int len)
                 *p = 0;
                 return 0;
             }
-                
+
             *p = (char)i;
         }
         else if (c == '+')

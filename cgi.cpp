@@ -467,7 +467,7 @@ int cgi(Connect *req)
         ret = -RS500;
         goto errExit1;
     }
-    
+
     n = pipe(cgi_serv);
     if (n == -1)
     {

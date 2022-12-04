@@ -83,7 +83,7 @@ void print_log(Connect *req)
     {
         ss  << req->numProc << "/" << req->numConn << "/" << req->numReq << " - " << req->remoteAddr
             << " - [" << log_time() << "] - \"-\" "
-            << req->respStatus << " " << req->send_bytes 
+            << req->respStatus << " " << req->send_bytes
             << " \"" << ((req->req_hd.iReferer >= 0) ? req->reqHdValue[req->req_hd.iReferer] : "-") << "\" \"-\"\n";
     }
     else

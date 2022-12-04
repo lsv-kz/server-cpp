@@ -121,7 +121,7 @@ int getLine(FILE *f, String &ss)
 
     ss = "";
     int ch, len = 0, numWords = 0, wr = 1, wrSpace = 0;
-    
+
     if (line_inc)
     {
         ++line_;
@@ -485,7 +485,7 @@ int read_conf_file(FILE *fconf)
     //------------------------------------------------------------------
     if (c.MinThreads < 1)
         c.MinThreads = 1;
-    
+
     if (c.MinThreads > c.MaxThreads)
     {
         fprintf(stderr, "<%s:%d> Error: NumThreads > MaxThreads\n", __func__, __LINE__);
@@ -495,13 +495,13 @@ int read_conf_file(FILE *fconf)
     //c.NumCpuCores = thread::hardware_concurrency();
     if (c.NumCpuCores == 0)
         c.NumCpuCores = 1;
-    
+
     if ((c.NumProc < 1) || (c.NumProc > 8))
     {
         fprintf(stderr, "<%s:%d> Error NumProc = %d; [1 < NumProc <= 6]\n", __func__, __LINE__, c.NumProc);
         return -1;
     }
-    
+
     if (c.NumProc < c.NumCpuCores)
         c.NumProc = 4;
     //------------------- Setting OPEN_MAX -----------------------------
@@ -510,7 +510,7 @@ int read_conf_file(FILE *fconf)
         fprintf(stderr, "<%s:%d> Error config file: MaxWorkConnections=%d\n", __func__, __LINE__, c.MaxWorkConnections);
         return -1;
     }
-    
+
     const int fd_stdio = 3, fd_logs = 2, fd_serv_sock = 2, fd_pipe = 1; // 8
     long min_open_fd = fd_stdio + fd_logs + fd_serv_sock + fd_pipe;
     int max_fd = min_open_fd + c.MaxWorkConnections * 2;
@@ -547,7 +547,7 @@ int read_conf_file(const char *path_conf)
             fprintf(stderr, "<%s:%d> Error fopen(%s): %s\n", __func__, __LINE__, path_conf, strerror(errno));
         return -1;
     }
-    
+
     return read_conf_file(fconf);
 }
 //======================================================================

@@ -381,12 +381,12 @@ void manager(int sockServer, int numProc, int to_parent)
     }
     catch (...)
     {
-        print_err("<%s:%d> Error create thread %d: errno=%d\n", __func__, 
+        print_err("<%s:%d> Error create thread %d: errno=%d\n", __func__,
                 __LINE__, ReqMan->get_all_thr(), errno);
         exit(errno);
     }
-    //------------------------------------------------------------------    
-    printf("[%d] +++++ num threads=%d, pid=%d, uid=%d, gid=%d  +++++\n", numProc, 
+    //------------------------------------------------------------------
+    printf("[%d] +++++ num threads=%d, pid=%d, uid=%d, gid=%d  +++++\n", numProc,
                             ReqMan->get_num_thr(), getpid(), getuid(), getgid());
 
     while (1)
@@ -395,7 +395,7 @@ void manager(int sockServer, int numProc, int to_parent)
         socklen_t addrSize = sizeof(struct sockaddr_storage);
         char data[1] = "";
         int sz = sizeof(data);
-        
+
         int clientSocket = recv_fd(unixSock, numProc, data, (int*)&sz);
         if (clientSocket < 0)
         {
@@ -422,12 +422,12 @@ void manager(int sockServer, int numProc, int to_parent)
         req->timeout = conf->Timeout;
         req->remoteAddr[0] = '\0';
         getpeername(clientSocket,(struct sockaddr *)&clientAddr, &addrSize);
-        n = getnameinfo((struct sockaddr *)&clientAddr, 
-                addrSize, 
-                req->remoteAddr, 
+        n = getnameinfo((struct sockaddr *)&clientAddr,
+                addrSize,
+                req->remoteAddr,
                 sizeof(req->remoteAddr),
-                req->remotePort, 
-                sizeof(req->remotePort), 
+                req->remotePort,
+                sizeof(req->remotePort),
                 NI_NUMERICHOST | NI_NUMERICSERV);
         if (n != 0)
             print_err(req, "<%s> Error getnameinfo()=%d: %s\n", __func__, n, gai_strerror(n));
@@ -436,7 +436,7 @@ void manager(int sockServer, int numProc, int to_parent)
         push_pollin_list(req);// --- First request ---
     }
 
-    print_err("<%d> <%s:%d>  numThr=%d; allNumThr=%u; all_req=%u; open_conn=%d\n", numProc, 
+    print_err("<%d> <%s:%d>  numThr=%d; allNumThr=%u; all_req=%u; open_conn=%d\n", numProc,
                     __func__, __LINE__, ReqMan->get_num_thr(), ReqMan->get_all_thr(), all_req, get_num_conn());
 
     ReqMan->close_manager();

@@ -43,12 +43,12 @@ const char *strstr_case(const char *s1, const char *s2)
 {
     const char *p1, *p2;
     char c1, c2;
-    
+
     if (!s1 || !s2) return NULL;
     if (*s2 == 0) return s1;
 
     int diff = ('a' - 'A');
-    
+
     for (; ; ++s1)
     {
         c1 = *s1;
@@ -67,7 +67,7 @@ const char *strstr_case(const char *s1, const char *s2)
             {
                 c2 = *p2;
                 if (!c2) return p1;
-                
+
                 c1 = *s1;
                 if (!c1) return NULL;
 
@@ -85,22 +85,22 @@ const char *strstr_case(const char *s1, const char *s2)
 int strlcmp_case(const char *s1, const char *s2, int len)
 {
     char c1, c2;
-    
+
     if (!s1 && !s2) return 0;
     if (!s1) return -1;
     if (!s2) return 1;
 
     int diff = ('a' - 'A');
-    
+
     for (; len > 0; --len, ++s1, ++s2)
     {
         c1 = *s1;
         c2 = *s2;
         if (!c1 && !c2) return 0;
-        
+
         c1 += (c1 >= 'A') && (c1 <= 'Z') ? diff : 0;
         c2 += (c2 >= 'A') && (c2 <= 'Z') ? diff : 0;
-        
+
         if (c1 != c2) return (c1 - c2);
     }
 
@@ -154,7 +154,6 @@ int get_int_http_prot(const char *s)
 //======================================================================
 const char *get_str_http_prot(int i)
 {
-
     if (i == HTTP11)
         return "HTTP/1.1";
     else if (i == HTTP10)
@@ -182,7 +181,7 @@ const char *istextfile_(FILE *f)
         if ((c < ' ') && (c != '\t') && (c != '\r') && (c != '\n'))
             return "";
     }
-    
+
     if (cnt == 0)
         return "";
 
@@ -268,10 +267,10 @@ const char *istextfile(const char *path)
         print_err("<%s:%d> Error fopen(%s): %s\n", __func__, __LINE__, path, strerror(errno));
         return "";
     }
-    
+
     const char *s = istextfile_(f);
     fclose(f);
-//print_err("<%s:%d> %s [%s]\n", __func__, __LINE__, path, s);
+
     return s;
 }
 //======================================================================
@@ -364,10 +363,10 @@ const char *ismediafile(const char *path)
         print_err("<%s:%d> Error fopen(%s): %s\n", __func__, __LINE__, path, strerror(errno));
         return "";
     }
-    
+
     const char *s = ismediafile_(f);
     fclose(f);
-//print_err("<%s:%d> %s [%s]\n", __func__, __LINE__, path, s);
+
     return s;
 }
 //======================================================================
@@ -501,7 +500,7 @@ int clean_path(char *path)
             ++o;
         }
     }
-    
+
     *(path + i) = 0;
 
     return i;
@@ -510,7 +509,7 @@ int clean_path(char *path)
 const char *base_name(const char *path)
 {
     const char *p;
-    
+
     if (!path)
         return NULL;
 
@@ -594,7 +593,7 @@ int parse_headers(Connect *req, char *pName, int i)
         print_err(req, "<%s:%d> Error: header is empty\n",  __func__, __LINE__);
         return -1;
     }
-    
+
     if (req->httpProt == HTTP09)
     {
         print_err(req, "<%s:%d> Error version protocol\n", __func__, __LINE__);
@@ -659,7 +658,7 @@ int parse_headers(Connect *req, char *pName, int i)
             req->sRange = p + 1;
         else
             req->sRange = NULL;
-        
+
         req->req_hd.iRange = i;
     }
     else if (!strcmp(pName, "referer:"))
