@@ -38,7 +38,7 @@ int create_server_socket(const Config *conf)
         return -1;
     }
 
-    if (conf->tcp_nodelay == 'y')
+    if (conf->TcpNoDelay == 'y')
     {
         setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, (void *)&sock_opt, sizeof(sock_opt)); // SOL_TCP
     }
@@ -141,71 +141,72 @@ int create_fcgi_socket(const char *host)
     return sockfd;
 }
 //======================================================================
-int unixBind(const char *path, int type)
+int get_sock_buf(int domain, int optname, int type, int protocol)
 {
-    struct sockaddr_un addr;
-
-    if (path == NULL || strlen(path) >= sizeof(addr.sun_path) - 1)
+    int sock = socket(domain, type, protocol);
+    if (sock < 0)
     {
-        errno = EINVAL;
-        return -1;
+        fprintf(stderr, "<%s:%d> Error socketpair(): %s\n", __func__, __LINE__, strerror(errno));
+        return -errno;
     }
 
-    memset(&addr, 0, sizeof(struct sockaddr_un));
-    addr.sun_family = AF_UNIX;
-    if (strlen(path) < sizeof(addr.sun_path))
-        strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
-    else
+    int sndbuf;
+    socklen_t optlen = sizeof(sndbuf);
+    if (getsockopt(sock, SOL_SOCKET, optname, &sndbuf, &optlen) < 0)
     {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-
-    int sock = socket(AF_UNIX, type, 0);
-    if (sock == -1)
-        return -1;
-
-    if (bind(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1)
-    {
-        fprintf(stderr, "<%s:%d> Error bind(): %s\n", __func__, __LINE__, strerror(errno));
+        fprintf(stderr, "<%s:%d> Error getsockopt(SO_SNDBUF): %s\n", __func__, __LINE__, strerror(errno));
         close(sock);
-        return -1;
+        return -errno;
     }
 
-    return sock;
+    close(sock);
+    return sndbuf;
 }
 //======================================================================
-int unixConnect(const char *path, int type)
+int unix_socket_pair(int sock[2])
 {
-    int sock;
     struct sockaddr_un addr;
+    char sock_path[sizeof(addr.sun_path) - 1];
 
-    if (path == NULL || strlen(path) >= sizeof(addr.sun_path) - 1)
-    {
-        errno = EINVAL;
-        return -1;
-    }
+    snprintf(sock_path, sizeof(sock_path), "sock_%u", getpid());
 
     memset(&addr, 0, sizeof(struct sockaddr_un));
     addr.sun_family = AF_UNIX;
-    if (strlen(path) < sizeof(addr.sun_path))
-        strncpy(addr.sun_path, path, sizeof(addr.sun_path) - 1);
-    else
+    strncpy(addr.sun_path, sock_path, sizeof(addr.sun_path) - 1);
+
+    sock[0] = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sock[0] == -1)
     {
-        errno = ENAMETOOLONG;
+        fprintf(stderr, "<%s:%d> Error socket(): %s\n", __func__, __LINE__, strerror(errno));
         return -1;
     }
 
-    sock = socket(AF_UNIX, type, 0);
-    if (sock == -1)
+    if (bind(sock[0], (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1)
+    {
+        fprintf(stderr, "<%s:%d> Error bind(): %s\n", __func__, __LINE__, strerror(errno));
+        remove(sock_path);
+        close(sock[0]);
         return -1;
+    }
 
-    if (connect(sock, (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1)
+    sock[1] = socket(AF_UNIX, SOCK_DGRAM, 0);
+    if (sock[1] == -1)
+    {
+        fprintf(stderr, "<%s:%d> Error socket(): %s\n", __func__, __LINE__, strerror(errno));
+        remove(sock_path);
+        close(sock[0]);
+        return -1;
+    }
+
+    if (connect(sock[1], (struct sockaddr *) &addr, sizeof(struct sockaddr_un)) == -1)
     {
         fprintf(stderr, "<%s:%d> Error connect(): %s\n", __func__, __LINE__, strerror(errno));
-        close(sock);
+        remove(sock_path);
+        close(sock[0]);
+        close(sock[1]);
         return -1;
     }
 
-    return sock;
+    remove(sock_path);
+    return 0;
 }

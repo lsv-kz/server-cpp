@@ -164,9 +164,9 @@ void end_response(Connect *req)
 {
     if (req->connKeepAlive == 0 || req->err < 0)
     { // ----- Close connect -----
-        if (req->err > NO_PRINT_LOG)// 0 > err > NO_PRINT_LOG(-1000)
+        if (req->err > NO_PRINT_LOG)// NO_PRINT_LOG(-1000) < err < 0
         {
-            if (req->err <= -RS101)// -1 > err > NO_PRINT_LOG(-1000)
+            if (req->err <= -RS101) // NO_PRINT_LOG(-1000) < err <= -101
             {
                 req->respStatus = -req->err;
                 send_message(req, NULL, NULL);
@@ -177,7 +177,6 @@ void end_response(Connect *req)
         shutdown(req->clientSocket, SHUT_RDWR);
         close(req->clientSocket);
         delete req;
-
     mtx_conn.lock();
         --count_conn;
     mtx_conn.unlock();
@@ -192,7 +191,7 @@ void end_response(Connect *req)
     else
     { // ----- KeepAlive -----
     #ifdef TCP_CORK_
-        if (conf->tcp_cork == 'y')
+        if (conf->TcpCork == 'y')
         {
         #if defined(LINUX_)
             int optval = 0;
@@ -237,7 +236,7 @@ void thr_create_manager(int numProc, RequestManager *ReqMan)
     //print_err("[%d] <%s:%d> *** Exit thread_req_manager() ***\n", numProc, __func__, __LINE__);
 }
 //======================================================================
-int servSock, unSock;
+int servSock, uxSock;
 RequestManager *RM;
 unsigned long allConn = 0;
 //======================================================================
@@ -245,55 +244,26 @@ static void signal_handler_child(int sig)
 {
     if (sig == SIGINT)
     {
-        print_err("[%d]<%s:%d> ### SIGINT ### all_req=%d\n", nProc, __func__, __LINE__, all_req);
-        shutdown(servSock, SHUT_RDWR);
-        close(servSock);
-    }
-    else if (sig == SIGTERM)
-    {
-        signal(SIGCHLD, SIG_IGN);
-        print_err("[%d]<%s:%d> ####### SIGTERM #######\n", nProc, __func__, __LINE__);
-        shutdown(unSock, SHUT_RDWR);
-        close(unSock);
+        fprintf(stderr, "[%d]<%s:%d> ### SIGINT ### all req: %d\n", nProc, __func__, __LINE__, all_req);
     }
     else if (sig == SIGSEGV)
     {
-        print_err("[%d]<%s:%d> ### SIGSEGV ###\n", nProc, __func__, __LINE__);
-        shutdown(unSock, SHUT_RDWR);
-        close(unSock);
-        shutdown(servSock, SHUT_RDWR);
-        close(servSock);
+        fprintf(stderr, "[%d]<%s:%d> ### SIGSEGV ###\n", nProc, __func__, __LINE__);
+        shutdown(uxSock, SHUT_RDWR);
+        close(uxSock);
         exit(1);
     }
-    else if (sig == SIGUSR1)
-    {
-        print_err("[%d]<%s:%d> ### SIGUSR1 ###\n", nProc, __func__, __LINE__);
-    }
-    else if (sig == SIGUSR1)
-    {
-        print_err("[%d]<%s:%d> ### SIGUSR1 ###\n", nProc, __func__, __LINE__);
-    }
     else
-        print_err("[%d]<%s:%d> ### SIG=%d ###\n", nProc, __func__, __LINE__, sig);
+        fprintf(stderr, "[%d]<%s:%d> ### SIG=%d ###\n", nProc, __func__, __LINE__, sig);
 }
 //======================================================================
 Connect *create_req();
-int create_unix_server_socket(const char *path);
 void set_max_conn(int n);
 int set_max_fd(int max_open_fd);
 //======================================================================
-void manager(int sockServer, int numProc, int to_parent)
+void manager(int sockServer, int numProc, int unixSock, int to_parent)
 {
-    String namePath;
-    namePath << "unix_sock_" << getpid() << "_"  << numProc;
-    int unixSock = unixBind(namePath.c_str(), SOCK_DGRAM);
-    if (unixSock == -1)
-    {
-        print_err("[%u]<%s:%d> Error unixBind()=%d\n", numProc, __func__, __LINE__, unixSock);
-        return;
-    }
-
-    unSock = unixSock;
+    uxSock = unixSock;
 
     RequestManager *ReqMan = new(nothrow) RequestManager(numProc);
     if (!ReqMan)
@@ -317,24 +287,6 @@ void manager(int sockServer, int numProc, int to_parent)
     if (signal(SIGSEGV, signal_handler_child) == SIG_ERR)
     {
         print_err("<%s:%d> Error signal(SIGSEGV): %s\n", __func__, __LINE__, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    if (signal(SIGTERM, signal_handler_child) == SIG_ERR)
-    {
-        fprintf(stderr, "<%s:%d> Error signal(SIGTERM): %s\n", __func__, __LINE__, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    if (signal(SIGUSR1, signal_handler_child) == SIG_ERR)
-    {
-        print_err("<%s:%d> Error signal(SIGUSR1): %s\n", __func__, __LINE__, strerror(errno));
-        exit(EXIT_FAILURE);
-    }
-
-    if (signal(SIGUSR2, signal_handler_child) == SIG_ERR)
-    {
-        print_err("[%d] <%s:%d> Error signal(SIGUSR2): %s\n", numProc, __func__, __LINE__, strerror(errno));
         exit(EXIT_FAILURE);
     }
     //------------------------------------------------------------------
@@ -444,8 +396,6 @@ void manager(int sockServer, int numProc, int to_parent)
 
     close_event_handler();
     EventHandler.join();
-
-    close(unixSock);
 
     usleep(100000);
     delete ReqMan;

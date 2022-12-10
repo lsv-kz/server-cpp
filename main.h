@@ -93,8 +93,8 @@ struct Config
     std::string PathPHP;
 
     int ListenBacklog;
-    char tcp_cork;
-    char tcp_nodelay;
+    char TcpCork;
+    char TcpNoDelay;
 
     char SendFile;
     int SndBufSize;
@@ -277,8 +277,6 @@ int fcgi(Connect *req);
 int scgi(Connect *req);
 //----------------------------------------------------------------------
 int create_fcgi_socket(const char *host);
-int unixBind(const char *path, int type);
-int unixConnect(const char *path, int type);
 //----------------------------------------------------------------------
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);
