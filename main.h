@@ -105,6 +105,7 @@ struct Config
     int MaxEventConnections;
 
     unsigned int NumProc;
+    unsigned int MaxNumProc;
     unsigned int MaxThreads;
     unsigned int MinThreads;
     unsigned int MaxCgiProc;
@@ -317,7 +318,6 @@ const char *content_type(const char *s);
 const char *base_name(const char *path);
 int parse_startline_request(Connect *req, char *s);
 int parse_headers(Connect *req, char *s, int n);
-const char *str_err(int i);
 //----------------------------------------------------------------------
 void create_logfiles(const std::string &);
 void close_logs(void);

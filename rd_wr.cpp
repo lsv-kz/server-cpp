@@ -161,13 +161,13 @@ long cgi_to_cosmos(int fd_in, int timeout)
     for (; ; )
     {
         rd = read_timeout(fd_in, buf, sizeof(buf), timeout);
-        if(rd == -1)
+        if (rd == -1)
         {
             if (errno == EINTR)
                 continue;
             return -1;
         }
-        else if(rd == 0)
+        else if (rd == 0)
             break;
         wr_bytes += rd;
     }
@@ -184,13 +184,13 @@ long fcgi_to_cosmos(int fd_in, unsigned int size, int timeout)
     for (; size > 0; )
     {
         rd = read_timeout(fd_in, buf, (size > sizeof(buf)) ? sizeof(buf) : size, timeout);
-        if(rd == -1)
+        if (rd == -1)
         {
             if (errno == EINTR)
                 continue;
             return -1;
         }
-        else if(rd == 0)
+        else if (rd == 0)
             break;
 
         size -= rd;

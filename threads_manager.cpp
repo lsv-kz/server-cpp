@@ -340,8 +340,16 @@ void manager(int sockServer, int numProc, int unixSock, int to_parent)
     //------------------------------------------------------------------
     printf("[%d] +++++ num threads=%d, pid=%d, uid=%d, gid=%d  +++++\n", numProc,
                             ReqMan->get_num_thr(), getpid(), getuid(), getgid());
+    //------------------------------------------------------------------
+    int run = 1;
+    unsigned char ch = numProc;
+    if (write(to_parent, &ch, sizeof(ch)) < 0)
+    {
+        print_err("[%d]<%s:%d> Error write(): %s\n", numProc, __func__, __LINE__, strerror(errno));
+        run = 0;
+    }
 
-    while (1)
+    while (run)
     {
         struct sockaddr_storage clientAddr;
         socklen_t addrSize = sizeof(struct sockaddr_storage);
@@ -405,6 +413,6 @@ Connect *create_req(void)
 {
     Connect *req = new(nothrow) Connect;
     if (!req)
-        print_err("<%s:%d> Error malloc(): %s\n", __func__, __LINE__, str_err(errno));
+        print_err("<%s:%d> Error malloc(): %s\n", __func__, __LINE__, strerror(errno));
     return req;
 }

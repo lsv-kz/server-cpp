@@ -68,6 +68,7 @@ void create_conf_file(const char *path)
     fprintf(f, "MaxEventConnections  100\n\n");
 
     fprintf(f, "NumProc  1\n");
+    fprintf(f, "MaxNumProc  4\n");
     fprintf(f, "MaxThreads  250\n");
     fprintf(f, "MinThreads  6\n");
     fprintf(f, "MaxCgiProc  15\n\n");
@@ -320,6 +321,8 @@ int read_conf_file(FILE *fconf)
                 s2 >> c.PidFilePath;
             else if ((s1 == "NumProc") && is_number(s2.c_str()))
                 s2 >> c.NumProc;
+            else if ((s1 == "MaxNumProc") && is_number(s2.c_str()))
+                s2 >> c.MaxNumProc;
             else if ((s1 == "MaxThreads") && is_number(s2.c_str()))
                 s2 >> c.MaxThreads;
             else if ((s1 == "MinThreads") && is_number(s2.c_str()))
@@ -508,14 +511,17 @@ int read_conf_file(FILE *fconf)
     if (c.NumCpuCores == 0)
         c.NumCpuCores = 1;
 
-    if ((c.NumProc < 1) || (c.NumProc > 8))
+    if ((c.MaxNumProc < 1) || (c.MaxNumProc > 8))
     {
-        fprintf(stderr, "<%s:%d> Error NumProc = %d; [1 < NumProc <= 6]\n", __func__, __LINE__, c.NumProc);
+        fprintf(stderr, "<%s:%d> Error MaxNumProc = %d; [1 <= MaxNumProc <= 8]\n", __func__, __LINE__, c.MaxNumProc);
         return -1;
     }
 
-    if (c.NumProc < c.NumCpuCores)
-        c.NumProc = 4;
+    if (c.NumProc > c.MaxNumProc)
+    {
+        fprintf(stderr, "<%s:%d> Error: NumProc=%u; MaxNumProc=%u\n", __func__, __LINE__, c.NumProc, c.MaxNumProc);
+        return -1;
+    }
     //------------------- Setting OPEN_MAX -----------------------------
     if (c.MaxWorkConnections <= 0)
     {
@@ -523,8 +529,8 @@ int read_conf_file(FILE *fconf)
         return -1;
     }
 
-    const int fd_stdio = 3, fd_logs = 2, fd_serv_sock = 2, fd_pipe = 1; // 8
-    long min_open_fd = fd_stdio + fd_logs + fd_serv_sock + fd_pipe;
+    const int fd_stdio = 3, fd_logs = 2, fd_sock = 2, fd_pipe = 1; // 8
+    long min_open_fd = fd_stdio + fd_logs + fd_sock + fd_pipe;
     int max_fd = min_open_fd + c.MaxWorkConnections * 2;
     n = set_max_fd(max_fd);
     if (n == -1)

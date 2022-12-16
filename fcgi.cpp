@@ -72,7 +72,7 @@ int fcgi_read_headers(char *s, int len, String *hdrs, int *stat)
             if (n == 0)
                 break;
 
-            if(!strncmp("Status", start_ptr, 6))
+            if (!strncmp("Status", start_ptr, 6))
             {
                 *(start_ptr + n) = 0;
                 *stat = atoi(start_ptr + 7);
@@ -96,7 +96,7 @@ int fcgi_read_headers(char *s, int len, String *hdrs, int *stat)
 //======================================================================
 int fcgi_(Connect *req, int fcgi_sock, FCGI_client & Fcgi)
 {
-    if(req->reqMethod == M_POST)
+    if (req->reqMethod == M_POST)
     {
         if (req->tail)
         {
@@ -239,13 +239,13 @@ int fcgi_send_param(Connect *req, int fcgi_sock)
 
     Fcgi.add("SERVER_PROTOCOL", get_str_http_prot(req->httpProt));
 
-    if(req->req_hd.iHost >= 0)
+    if (req->req_hd.iHost >= 0)
         Fcgi.add("HTTP_HOST", req->reqHdValue[req->req_hd.iHost]);
 
-    if(req->req_hd.iReferer >= 0)
+    if (req->req_hd.iReferer >= 0)
         Fcgi.add("HTTP_REFERER", req->reqHdValue[req->req_hd.iReferer]);
 
-    if(req->req_hd.iUserAgent >= 0)
+    if (req->req_hd.iUserAgent >= 0)
         Fcgi.add("HTTP_USER_AGENT", req->reqHdValue[req->req_hd.iUserAgent]);
 
     Fcgi.add("SCRIPT_NAME", req->decodeUri);
@@ -257,15 +257,15 @@ int fcgi_send_param(Connect *req, int fcgi_sock)
         Fcgi.add("SCRIPT_FILENAME", s.c_str());
     }
 
-    if(req->reqMethod == M_POST)
+    if (req->reqMethod == M_POST)
     {
-        if(req->req_hd.iReqContentType >= 0)
+        if (req->req_hd.iReqContentType >= 0)
         {
             Fcgi.add("CONTENT_TYPE", req->reqHdValue[req->req_hd.iReqContentType]);
             //print_err(req, "<%s:%d> %s\n", __func__, __LINE__, req->reqHdValue[req->req_hd.iReqContentType]);
         }
 
-        if(req->req_hd.iReqContentLength >= 0)
+        if (req->req_hd.iReqContentLength >= 0)
         {
             Fcgi.add("CONTENT_LENGTH", req->reqHdValue[req->req_hd.iReqContentLength]);
         }

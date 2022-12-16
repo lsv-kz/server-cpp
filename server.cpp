@@ -18,15 +18,11 @@ void create_proc(int);
 static string conf_path;
 static string pidFile;
 
-static int from_chld[2], unixFD[8][2];
-
-static int numConn[8];
 static pid_t pidArr[8];
-
+static int unixFD[8][2];
+static int numConn[8];
 static int start = 0, restart = 1;
-
 static int close_chld_proc = 0;
-
 static unsigned int all_conn = 0;
 //======================================================================
 static void signal_handler(int sig)
@@ -95,7 +91,7 @@ static void signal_handler(int sig)
 //======================================================================
 pid_t create_child(int, int *, int);
 //======================================================================
-void create_proc(int NumProc)
+void create_proc(int NumProc, int from_chld[2], int *sndbuf)
 {
     if (pipe(from_chld) < 0)
     {
@@ -103,35 +99,32 @@ void create_proc(int NumProc)
         exit(1);
     }
     //------------------------------------------------------------------
-    int sndbuf = get_sock_buf(AF_UNIX, SO_SNDBUF, SOCK_DGRAM, 0);
-    if (sndbuf < 0)
+    *sndbuf = get_sock_buf(AF_UNIX, SO_SNDBUF, SOCK_DGRAM, 0);
+    if (*sndbuf < 0)
     {
-        fprintf(stderr, " Error get_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-sndbuf));
-        sndbuf = 0;
+        fprintf(stderr, " Error get_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-(*sndbuf)));
+        *sndbuf = 0;
     }
     else
-        fprintf(stderr, " AF_UNIX: SO_SNDBUF=%d\n\n", sndbuf);
+        fprintf(stderr, " AF_UNIX: SO_SNDBUF=%d\n\n", *sndbuf);
 
-    if (sndbuf >= 163840)
-        sndbuf = 0;
+    if (*sndbuf >= 163840)
+        *sndbuf = 0;
     else
-        sndbuf = 163840;
+        *sndbuf = 163840;
 
-    pid_t pid_child;
     int i = 0;
     while (i < NumProc)
     {
-        pid_child = create_child(i, from_chld, sndbuf);
-        if (pid_child < 0)
+        pidArr[i] = create_child(i, from_chld, *sndbuf);
+        if (pidArr[i] < 0)
         {
             fprintf(stderr, "<%s:%d> Error create_child() %d\n", __func__, __LINE__, i);
             exit(1);
         }
-        pidArr[i] = pid_child;
+
         ++i;
     }
-
-    close(from_chld[1]);
 }
 //======================================================================
 void print_help(const char *name)
@@ -157,25 +150,25 @@ void print_limits()
     if (sbuf < 0)
         fprintf(stderr, " Error get_sock_buf(AF_INET, SOCK_STREAM, 0): %s\n", strerror(-sbuf));
     else
-        fprintf(stderr, " AF_INET: SO_SNDBUF=%d\n", sbuf);
+        fprintf(stdout, " AF_INET: SO_SNDBUF=%d\n", sbuf);
 
     sbuf = get_sock_buf(AF_INET, SO_RCVBUF, SOCK_STREAM, 0);
     if (sbuf < 0)
         fprintf(stderr, " Error get_sock_buf(AF_INET, SOCK_STREAM, 0): %s\n", strerror(-sbuf));
     else
-        fprintf(stderr, " AF_INET: SO_RCVBUF=%d\n\n", sbuf);
+        fprintf(stdout, " AF_INET: SO_RCVBUF=%d\n\n", sbuf);
     //------------------------------------------------------------------
     sbuf = get_sock_buf(AF_UNIX, SO_SNDBUF, SOCK_DGRAM, 0);
     if (sbuf < 0)
         fprintf(stderr, " Error get_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-sbuf));
     else
-        fprintf(stderr, " AF_UNIX: SO_SNDBUF=%d\n", sbuf);
+        fprintf(stdout, " AF_UNIX: SO_SNDBUF=%d\n", sbuf);
 
     sbuf = get_sock_buf(AF_UNIX, SO_RCVBUF, SOCK_DGRAM, 0);
     if (sbuf < 0)
         fprintf(stderr, " Error get_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-sbuf));
     else
-        fprintf(stderr, " AF_UNIX: SO_RCVBUF=%d\n\n", sbuf);
+        fprintf(stdout, " AF_UNIX: SO_RCVBUF=%d\n\n", sbuf);
 }
 //======================================================================
 void print_config()
@@ -436,8 +429,9 @@ int main_proc()
             unsetenv(buf);
         }
     }
-
-    create_proc(conf->NumProc);
+    //------------------------------------------------------------------
+    int from_chld[2], sndbuf = 0;
+    create_proc(conf->NumProc, from_chld, &sndbuf);
     cout << "   pid = " << pid << "\n\n";
     //------------------------------------------------------------------
     for (unsigned int i = 0; i < conf->NumProc; ++i)
@@ -454,6 +448,7 @@ int main_proc()
     close_chld_proc = 0;
 
     unsigned int num_fdrd = 2, i_proc = 0;
+    unsigned int num_create_proc = conf->NumProc;
 
     while (1)
     {
@@ -470,7 +465,7 @@ int main_proc()
             else
             {
                 i_proc++;
-                if (i_proc >= conf->NumProc)
+                if (i_proc >= num_create_proc)
                     i_proc = 0;
             }
 
@@ -483,12 +478,28 @@ int main_proc()
                 }
 
                 i_proc++;
-                if (i_proc >= conf->NumProc)
+                if (i_proc >= num_create_proc)
                     i_proc = 0;
 
                 if (i_proc == i)
                 {
-                    num_fdrd = 1;
+                    if (num_create_proc < conf->MaxNumProc)
+                    {
+                        pidArr[num_create_proc] = create_child(num_create_proc, from_chld, sndbuf);
+                        if (pidArr[num_create_proc] < 0)
+                        {
+                            fprintf(stderr, "<%s:%d> Error create_child() %d\n", __func__, __LINE__, num_create_proc);
+                            num_fdrd = 1;
+                        }
+                        else
+                        {
+                            i_proc = num_create_proc;
+                            ++num_create_proc;
+                            num_fdrd = 2;
+                        }
+                    }
+                    else
+                        num_fdrd = 1;
                     break;
                 }
             }
@@ -561,7 +572,7 @@ int main_proc()
         }
     }
 
-    for (unsigned int i = 0; i < conf->NumProc; ++i)
+    for (unsigned int i = 0; i < num_create_proc; ++i)
     {
         char ch = i;
         int ret = send_fd(unixFD[i][1], -1, &ch, 1);
@@ -606,7 +617,7 @@ pid_t create_child(int num_chld, int *from_chld, int sock_buf_size)
         fprintf(stderr, "<%s:%d> Error unix_socket_pair(): %s\n", __func__, __LINE__, strerror(errno));
         return -1;
     }
-    
+
     if (sock_buf_size > 0)
     {
         socklen_t optlen = sizeof(sock_buf_size);
@@ -661,8 +672,18 @@ pid_t create_child(int num_chld, int *from_chld, int sock_buf_size)
     else if (pid < 0)
     {
         fprintf(stderr, "<> Error fork(): %s\n", strerror(errno));
+        return -1;
     }
 
     close(unixFD[num_chld][0]);
+
+    char ch;
+    ret = read_timeout(from_chld[0], &ch, sizeof(ch), 3);
+    if (ret <= 0)
+    {
+        fprintf(stderr, "<%s:%d> Error read()=%d\n", __func__, __LINE__, ret);
+        pid = -1;
+    }
+
     return pid;
 }
