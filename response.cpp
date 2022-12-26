@@ -487,10 +487,10 @@ int send_multypart(Connect *req, ArrayRanges& rg, char *rd_buf, int size)
             return -1;
         }
 
-        n = write_timeout(req->clientSocket, buf, strlen(buf), conf->Timeout);
+        n = write_to_client(req, buf, strlen(buf), conf->Timeout);
         if (n < 0)
         {
-            print_err(req, "<%s:%d> Error: write_timeout(), %lld bytes\n", __func__, __LINE__, send_all_bytes);
+            print_err(req, "<%s:%d> Error: write_to_client(), %lld bytes\n", __func__, __LINE__, send_all_bytes);
             return -1;
         }
 
@@ -506,10 +506,10 @@ int send_multypart(Connect *req, ArrayRanges& rg, char *rd_buf, int size)
 
     req->send_bytes = send_all_bytes;
     snprintf(buf, sizeof(buf), "\r\n--%s--\r\n", boundary);
-    n = write_timeout(req->clientSocket, buf, strlen(buf), conf->Timeout);
+    n = write_to_client(req, buf, strlen(buf), conf->Timeout);
     if (n < 0)
     {
-        print_err(req, "<%s:%d> Error: write_timeout() %lld bytes\n", __func__, __LINE__, send_all_bytes);
+        print_err(req, "<%s:%d> Error: write_to_client() %lld bytes\n", __func__, __LINE__, send_all_bytes);
         return -1;
     }
     req->send_bytes += n;

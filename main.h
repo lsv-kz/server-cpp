@@ -75,6 +75,7 @@ enum { cgi_ex = 1, php_cgi, php_fpm, fast_cgi, s_cgi };
 enum { EXIT_THR = 1 };
 
 const int NO_PRINT_LOG = -1000;
+const int PROC_LIMIT = 8;
 
 void print_err(const char *format, ...);
 //----------------------------------------------------------------------
@@ -216,7 +217,7 @@ public:
     char  *reqHdName[MAX_HEADERS + 1];
     const char  *reqHdValue[MAX_HEADERS + 1];
     //--------------------------------------
-    std::string  sLogTime;
+    std::string  sTime;
     int  respStatus;
     int  scriptType;
     const char  *scriptName;
@@ -282,14 +283,13 @@ int create_fcgi_socket(const char *host);
 int encode(const char *s_in, char *s_out, int len_out);
 int decode(const char *s_in, int len_in, char *s_out, int len);
 //----------------------------------------------------------------------
-int read_timeout(int fd, char *buf, int len, int timeout);
-int write_timeout(int fd, const char *buf, int len, int timeout);
+int read_from_pipe(int fd, char *buf, int len, int timeout);
+int read_from_client(Connect *req, char *buf, int len, int timeout);
 
-int client_to_cgi(int fd_in, int fd_out, long long *cont_len);
-void client_to_cosmos(Connect *req, long long *size);
-long cgi_to_cosmos(int fd_in, int timeout);
+int write_to_pipe(int fd, const char *buf, int len, int timeout);
+int write_to_client(Connect *req, const char *buf, int len, int timeout);
 
-long fcgi_to_cosmos(int fd_in, unsigned int size, int timeout);
+int socket_to_pipe(Connect *req, int fd_out, long long *cont_len);
 
 int send_largefile(Connect *req, char *buf, int size, off_t offset, long long *cont_len);
 

@@ -132,7 +132,7 @@ static void del_from_list(Connect *r)
     if (r->event == POLLOUT)
         close(r->fd);
     else
-        get_time(r->sLogTime);
+        get_time(r->sTime);
 
     if (r->prev && r->next)
     {

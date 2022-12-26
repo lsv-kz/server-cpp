@@ -14,7 +14,7 @@ int send_response_headers(Connect *req, const String *hdrs)
     }
 
     resp << get_str_http_prot(req->httpProt) << " " << status_resp(req->respStatus) << "\r\n"
-        << "Date: " << req->sLogTime << "\r\n"
+        << "Date: " << req->sTime << "\r\n"
         << "Server: " << conf->ServerSoftware << "\r\n";
 
     if (req->reqMethod == M_OPTIONS)
@@ -66,7 +66,7 @@ int send_response_headers(Connect *req, const String *hdrs)
         return -1;
     }
 
-    int n = write_timeout(req->clientSocket, resp.c_str(), resp.size(), conf->Timeout);
+    int n = write_to_client(req, resp.c_str(), resp.size(), conf->Timeout);
     if (n <= 0)
     {
         print_err(req, "<%s:%d> Sent to client response error; (%d)\n", __func__, __LINE__, n);
@@ -94,9 +94,10 @@ void send_message(Connect *req, const char *msg, const String *hdrs)
                 "<meta charset=\"utf-8\">\r\n"
                 "</head>\r\n"
                 "<body>\r\n"
-                "<h3>" << title << "</h3>\r\n"
-                "<p>" << (msg ? msg : "") <<  "</p>\r\n"
-                "<hr>\r\n" << req->sLogTime << "\r\n"
+                "<h3>" << title << "</h3>\r\n";
+        if (msg)
+            html << "<p>" << msg <<  "</p>\r\n";
+        html << "<hr>\r\n" << req->sTime << "\r\n"
                 "</body>\r\n"
                 "</html>\r\n";
 
@@ -120,10 +121,10 @@ void send_message(Connect *req, const char *msg, const String *hdrs)
 
     if (req->respContentLength > 0)
     {
-        req->send_bytes = write_timeout(req->clientSocket, html.c_str(), req->respContentLength, conf->Timeout);
+        req->send_bytes = write_to_client(req, html.c_str(), req->respContentLength, conf->Timeout);
         if (req->send_bytes <= 0)
         {
-            print_err(req, "<%s:%d> Error write_timeout()\n", __func__, __LINE__);
+            print_err(req, "<%s:%d> Error write_to_client()\n", __func__, __LINE__);
         }
     }
 }

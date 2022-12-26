@@ -195,7 +195,7 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
     //------------------------------------------------------------------
     chunk_buf << "  </table>\r\n"
               "  <hr>\r\n"
-              "  " << req->sLogTime << "\r\n"
+              "  " << req->sTime << "\r\n"
               "  <a href=\"#top\" style=\"display:block;\r\n"
               "         position:fixed;\r\n"
               "         bottom:30px;\r\n"

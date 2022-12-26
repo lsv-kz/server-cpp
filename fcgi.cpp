@@ -113,7 +113,7 @@ int fcgi_(Connect *req, int fcgi_sock, FCGI_client & Fcgi)
         {
             char buf[4096];
             int rd = (req->req_hd.reqContentLength > (long long)sizeof(buf)) ? sizeof(buf) : (int)req->req_hd.reqContentLength;
-            int ret = read_timeout(req->clientSocket, buf, rd, conf->Timeout);
+            int ret = read_from_client(req, buf, rd, conf->Timeout);
             if (ret < 0)
             {
                 print_err(req, "<%s:%d> Error: reaf_from_client()\n", __func__, __LINE__);
@@ -179,8 +179,19 @@ int fcgi_(Connect *req, int fcgi_sock, FCGI_client & Fcgi)
             {
                 if (chunk_mode)
                 {
-                    if (send_response_headers(req, &hdrs) == -1)
-                        return -1;
+                    if (req->respStatus >= RS400)
+                    {
+                        send_message(req, NULL, NULL);
+                        return 0;
+                    }
+                    else
+                    {
+                        if (send_response_headers(req, &hdrs) == -1)
+                            return -1;
+
+                        if (req->respStatus == RS204)
+                            return 0;
+                    }
                 }
 
                 chunk.add_arr(p + tail, n - tail);
@@ -306,15 +317,7 @@ int fcgi(Connect *req)
         if (req->req_hd.reqContentLength > conf->ClientMaxBodySize)
         {
             print_err(req, "<%s:%d> 413 Request entity too large: %lld\n", __func__, __LINE__, req->req_hd.reqContentLength);
-            if (req->req_hd.reqContentLength < 50000000)
-            {
-                if (req->tail)
-                    req->req_hd.reqContentLength -= req->lenTail;
-                client_to_cosmos(req, &req->req_hd.reqContentLength);
-                if (req->req_hd.reqContentLength == 0)
-                    return -RS413;
-            }
-            return -1;
+            return -RS413;
         }
     }
 
@@ -340,7 +343,7 @@ int fcgi(Connect *req)
 
     if (sock_fcgi <= 0)
     {
-        print_err(req, "<%s:%d> Error connect to fcgi\n", __func__, __LINE__);
+        print_err(req, "<%s:%d> Error connect to fcgi: %d\n", __func__, __LINE__, -sock_fcgi);
         if (sock_fcgi == 0)
             ret = -RS400;
         else
