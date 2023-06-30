@@ -65,12 +65,9 @@ void create_conf_file(const char *path)
 
     fprintf(f, "NumCpuCores  1\n");
     fprintf(f, "MaxWorkConnections  768\n");
-    fprintf(f, "MaxEventConnections  100\n\n");
 
     fprintf(f, "NumProc  1\n");
-    fprintf(f, "MaxNumProc  4\n");
-    fprintf(f, "MaxThreads  250\n");
-    fprintf(f, "MinThreads  6\n");
+    fprintf(f, "NumThreads  2\n");
     fprintf(f, "MaxCgiProc  15\n\n");
 
     fprintf(f, "MaxRequestsPerClient  100\n");
@@ -307,8 +304,6 @@ int read_conf_file(FILE *fconf)
                 s2 >> c.NumCpuCores;
             else if ((s1 == "MaxWorkConnections") && is_number(s2.c_str()))
                 s2 >> c.MaxWorkConnections;
-            else if ((s1 == "MaxEventConnections") && is_number(s2.c_str()))
-                s2 >> c.MaxEventConnections;
             else if ((s1 == "TimeoutPoll") && is_number(s2.c_str()))
                 s2 >> c.TimeoutPoll;
             else if (s1 == "DocumentRoot")
@@ -321,12 +316,8 @@ int read_conf_file(FILE *fconf)
                 s2 >> c.PidFilePath;
             else if ((s1 == "NumProc") && is_number(s2.c_str()))
                 s2 >> c.NumProc;
-            else if ((s1 == "MaxNumProc") && is_number(s2.c_str()))
-                s2 >> c.MaxNumProc;
-            else if ((s1 == "MaxThreads") && is_number(s2.c_str()))
-                s2 >> c.MaxThreads;
-            else if ((s1 == "MinThreads") && is_number(s2.c_str()))
-                s2 >> c.MinThreads;
+            else if ((s1 == "NumThreads") && is_number(s2.c_str()))
+                s2 >> c.NumThreads;
             else if ((s1 == "MaxCgiProc") && is_number(s2.c_str()))
                 s2 >> c.MaxCgiProc;
             else if ((s1 == "MaxRequestsPerClient") && is_number(s2.c_str()))
@@ -399,7 +390,7 @@ int read_conf_file(FILE *fconf)
             {
                 if (find_bracket(fconf, '{') == 0)
                 {
-                    fprintf(stderr, "<%s:%d> Error not found \"{\", line %d\n", __func__, __LINE__, line_);
+                    fprintf(stderr, "<%s:%d> Error not found \"{\", line <%d>\n", __func__, __LINE__, line_);
                     return -1;
                 }
 
@@ -409,7 +400,7 @@ int read_conf_file(FILE *fconf)
                     ss >> s1;
                     ss >> s2;
 
-                    create_fcgi_list(&c.fcgi_list, s1, s2, fast_cgi);
+                    create_fcgi_list(&c.fcgi_list, s1, s2, FASTCGI);
                 }
 
                 if (ss.str() != "}")
@@ -432,7 +423,7 @@ int read_conf_file(FILE *fconf)
                     ss >> s1;
                     ss >> s2;
 
-                    create_fcgi_list(&c.fcgi_list, s1, s2, s_cgi);
+                    create_fcgi_list(&c.fcgi_list, s1, s2, SCGI);
                 }
 
                 if (ss.str() != "}")
@@ -486,42 +477,21 @@ int read_conf_file(FILE *fconf)
         return -1;
     }
     //------------------------------------------------------------------
-    if (conf->MaxEventConnections <= 0)
-    {
-        fprintf(stderr, "<%s:%d> Error: MaxEventConnect=%d\n", __func__, __LINE__, conf->MaxEventConnections);
-        exit(1);
-    }
-
     if (conf->SndBufSize <= 0)
     {
         fprintf(stderr, "<%s:%d> Error: SndBufSize=%d\n", __func__, __LINE__, conf->SndBufSize);
         exit(1);
     }
     //------------------------------------------------------------------
-    if (c.MinThreads < 1)
-        c.MinThreads = 1;
-
-    if (c.MinThreads > c.MaxThreads)
+    if ((c.NumThreads > 6) || (c.NumThreads < 1))
     {
-        fprintf(stderr, "<%s:%d> Error: NumThreads > MaxThreads\n", __func__, __LINE__);
+        fprintf(stderr, "<%s:%d> Error: NumThreads=%d\n", __func__, __LINE__, c.NumThreads);
         return -1;
     }
     //------------------------------------------------------------------
     //c.NumCpuCores = thread::hardware_concurrency();
     if (c.NumCpuCores == 0)
         c.NumCpuCores = 1;
-
-    if ((c.MaxNumProc < 1) || (c.MaxNumProc > PROC_LIMIT))
-    {
-        fprintf(stderr, "<%s:%d> Error MaxNumProc = %d; [1 <= MaxNumProc <= 8]\n", __func__, __LINE__, c.MaxNumProc);
-        return -1;
-    }
-
-    if (c.NumProc > c.MaxNumProc)
-    {
-        fprintf(stderr, "<%s:%d> Error: NumProc=%u; MaxNumProc=%u\n", __func__, __LINE__, c.NumProc, c.MaxNumProc);
-        return -1;
-    }
     //------------------- Setting OPEN_MAX -----------------------------
     if (c.MaxWorkConnections <= 0)
     {

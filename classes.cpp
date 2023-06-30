@@ -1,5 +1,6 @@
-#include "classes.h"
+#include "main.h"
 
+using namespace std;
 //======================================================================
 void Connect::init()
 {
@@ -7,12 +8,12 @@ void Connect::init()
     //------------------------------------
     decodeUri[0] = 0;
     uri = NULL;
-    p_newline = bufReq;
+    p_newline = req.buf;
     tail = NULL;
     //------------------------------------
     err = 0;
     lenTail = 0;
-    lenBufReq = 0;
+    req.len = 0;
     countReqHeaders = 0;
     reqMethod = 0;
     httpProt = 0;
@@ -21,10 +22,13 @@ void Connect::init()
     req_hd = {-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1LL};
 
     respStatus = 0;
+    mode_send = NO_CHUNK;
 
-    scriptType = 0;
-    scriptName = NULL;
+    cgi = NULL;
+    cgi_type = NO_CGI;
+    scriptName = "";
 
+    hdrs = "";
     numPart = 0;
     respContentLength = -1LL;
     respContentType = NULL;
@@ -33,120 +37,8 @@ void Connect::init()
     offset = 0;
     send_bytes = 0LL;
 }
-//----------------------------------------------------------------------
-int Connect::hd_read()
-{
-    errno = 0;
-    if (err)
-        return -1;
-    int num_read = SIZE_BUF_REQUEST - lenBufReq - 1;
-    if (num_read <= 0)
-        return -RS414;
-    int n = recv(clientSocket, bufReq + lenBufReq, num_read, 0);
-    if (n < 0)
-    {
-        if (errno == EAGAIN)
-            return -EAGAIN;
-        return -1;
-    }
-    else if (n == 0)
-        return NO_PRINT_LOG;
-
-    lenTail += n;
-    lenBufReq += n;
-    bufReq[lenBufReq] = 0;
-
-    n = find_empty_line();
-    if (n == 1) // empty line found
-        return lenBufReq;
-    else if (n < 0) // error
-        return n;
-
-    return 0;
-}
-//----------------------------------------------------------------------
-int Connect::find_empty_line()
-{
-    if (err) return -1;
-    timeout = conf->Timeout;
-    char *pCR, *pLF, ch;
-    while (lenTail > 0)
-    {
-        int i = 0, len_line = 0;
-        pCR = pLF = NULL;
-        while (i < lenTail)
-        {
-            ch = *(p_newline + i);
-            if (ch == '\r')// found CR
-            {
-                if (i == (lenTail - 1))
-                    return 0;
-                if (pCR)
-                    return -RS400;
-                pCR = p_newline + i;
-            }
-            else if (ch == '\n')// found LF
-            {
-                pLF = p_newline + i;
-                if ((pCR) && ((pLF - pCR) != 1))
-                    return -RS400;
-                i++;
-                break;
-            }
-            else
-                len_line++;
-            i++;
-        }
-
-        if (pLF) // found end of line '\n'
-        {
-            if (pCR == NULL)
-                *pLF = 0;
-            else
-                *pCR = 0;
-
-            if (len_line == 0) // found empty line
-            {
-                if (countReqHeaders == 0) // empty lines before Starting Line
-                {
-                    if ((pLF - bufReq + 1) > 4) // more than two empty lines
-                        return -RS400;
-                    lenTail -= i;
-                    p_newline = pLF + 1;
-                    continue;
-                }
-
-                if (lenTail > 0) // tail after empty line (Message Body for POST method)
-                {
-                    tail = pLF + 1;
-                    lenTail -= i;
-                }
-                else
-                    tail = NULL;
-                return 1;
-            }
-
-            if (countReqHeaders < MAX_HEADERS)
-            {
-                reqHdName[countReqHeaders] = p_newline;
-                countReqHeaders++;
-            }
-            else
-                return -RS500;
-
-            lenTail -= i;
-            p_newline = pLF + 1;
-        }
-        else if (pCR && (!pLF))
-            return -RS400;
-        else
-            break;
-    }
-
-    return 0;
-}
 //======================================================================
-/*void ArrayRanges::check_ranges()
+/*void Ranges::check_ranges()
 {
     if (err) return;
     Range *r = range;
@@ -181,7 +73,7 @@ int Connect::find_empty_line()
     }
 }*/
 //----------------------------------------------------------------------
-void ArrayRanges::check_ranges()
+void Ranges::check_ranges()
 {
     if (err) return;
     int num = nRanges;
@@ -225,7 +117,7 @@ void ArrayRanges::check_ranges()
     }
 }
 //----------------------------------------------------------------------
-void ArrayRanges::parse_ranges(char *sRange)
+void Ranges::parse_ranges(char *sRange)
 {
     if (err) return;
     long long start = 0, end = 0, size = sizeFile, ll;
@@ -298,7 +190,12 @@ void ArrayRanges::parse_ranges(char *sRange)
                 return;
             }
 
-            if (end >= size)
+            if (start < 0)
+            {
+                start = 0;
+                end = size - 1;
+            }
+            else if (end >= size)
                 end = size - 1;
 
             if (start <= end)
@@ -324,8 +221,9 @@ void ArrayRanges::parse_ranges(char *sRange)
     }
 }
 //----------------------------------------------------------------------
-ArrayRanges::ArrayRanges(char *s, long long sz)
+void Ranges::init(char *s, long long sz)
 {
+    err = 0;
     if (!s)
     {
         err = RS500;
@@ -338,21 +236,24 @@ ArrayRanges::ArrayRanges(char *s, long long sz)
         return;
     }
 
+    nRanges = index = 0;
+
+    unsigned int n = 0;
     for ( char *p = s; *p; ++p)
     {
         if (*p == ',')
-            SizeArray++;
+            n++;
     }
 
-    SizeArray++;
+    n++;
 
-    if (SizeArray > conf->MaxRanges)
-        SizeArray = conf->MaxRanges;
-    reserve();
+    if (n > conf->MaxRanges)
+        n = conf->MaxRanges;
+    reserve(n);
     sizeFile = sz;
     parse_ranges(s);
     if ((nRanges == 0) && (err == 0))
         err = RS416;
-    //else if (nRanges > 1)
-    //    check_ranges();
+    else if (nRanges > 1)
+        check_ranges();
 }

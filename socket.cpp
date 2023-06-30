@@ -141,6 +141,47 @@ int create_fcgi_socket(const char *host)
     return sockfd;
 }
 //======================================================================
+int get_sock_fcgi(Connect *req, const char *script)
+{
+    int fcgi_sock = -1, len;
+    fcgi_list_addr *ps = conf->fcgi_list;
+
+    if (!script)
+    {
+        print_err(req, "<%s:%d> Not found\n", __func__, __LINE__);
+        return -RS404;
+    }
+
+    len = strlen(script);
+    if (len > 64)
+    {
+        print_err(req, "<%s:%d> Error len name script\n", __func__, __LINE__);
+        return -RS400;
+    }
+
+    for (; ps; ps = ps->next)
+    {
+        if (!strcmp(script, ps->script_name.c_str()))
+            break;
+    }
+
+    if (ps != NULL)
+    {
+        fcgi_sock = create_fcgi_socket(ps->addr.c_str());
+        if (fcgi_sock < 0)
+        {
+            fcgi_sock = -RS502;
+        }
+    }
+    else
+    {
+        print_err(req, "<%s:%d> Not found: %s\n", __func__, __LINE__, script);
+        fcgi_sock = -RS404;
+    }
+
+    return fcgi_sock;
+}
+//======================================================================
 int get_sock_buf(int domain, int optname, int type, int protocol)
 {
     int sock = socket(domain, type, protocol);
@@ -208,5 +249,162 @@ int unix_socket_pair(int sock[2])
     }
 
     remove(sock_path);
+    return 0;
+}
+//======================================================================
+int send_fd(int unix_sock, int fd, void *data, int size_data)
+{
+    struct msghdr msgh;
+    struct iovec iov;
+    ssize_t ret;
+    char   buf[CMSG_SPACE(sizeof(int))];
+    memset(buf, 0, sizeof(buf));
+
+    msgh.msg_name = NULL;
+    msgh.msg_namelen = 0;
+
+    msgh.msg_iov = &iov;
+    msgh.msg_iovlen = 1;
+    iov.iov_base = data;
+    iov.iov_len = size_data;
+
+    if (fd != -1)
+    {
+        msgh.msg_control = buf;
+        msgh.msg_controllen = sizeof(buf);
+
+        struct cmsghdr *cmsgp = CMSG_FIRSTHDR(&msgh);
+        cmsgp->cmsg_len = CMSG_LEN(sizeof(int));
+        cmsgp->cmsg_level = SOL_SOCKET;
+        cmsgp->cmsg_type = SCM_RIGHTS;
+        memcpy(CMSG_DATA(cmsgp), &fd, sizeof(int));
+    }
+    else
+    {
+        msgh.msg_control = NULL;
+        msgh.msg_controllen = 0;
+    }
+
+    ret = sendmsg(unix_sock, &msgh, 0);
+    if (ret == -1)
+    {
+        if (errno == ENOBUFS)
+            ret = -ENOBUFS;
+        else
+            print_err("<%s:%d> Error sendmsg(): %s\n", __func__, __LINE__, strerror(errno));
+    }
+
+    return ret;
+}
+//======================================================================
+int recv_fd(int unix_sock, int num_chld, void *data, int *size_data)
+{
+    int fd;
+    struct msghdr msgh;
+    struct iovec iov;
+    ssize_t ret;
+    char buf[CMSG_SPACE(sizeof(int))];
+
+    msgh.msg_name = NULL;
+    msgh.msg_namelen = 0;
+
+    msgh.msg_iov = &iov;
+    msgh.msg_iovlen = 1;
+    iov.iov_base = data;
+    iov.iov_len = *size_data;
+
+    msgh.msg_control = buf;
+    msgh.msg_controllen = sizeof(buf);
+
+    ret = recvmsg(unix_sock, &msgh, 0);
+    if (ret <= 0)
+    {
+        if (ret < 0)
+            print_err("[%d]<%s:%d> Error recvmsg(): %s\n", num_chld, __func__, __LINE__, strerror(errno));
+        return -1;
+    }
+
+    *size_data = ret;
+
+    struct cmsghdr *cmsgp = CMSG_FIRSTHDR(&msgh);
+    if (cmsgp == NULL || cmsgp->cmsg_len != CMSG_LEN(sizeof(int)))
+    {
+        print_err("[%d]<%s:%d> bad cmsg header\n", num_chld, __func__, __LINE__);
+        return -1;
+    }
+
+    if (cmsgp->cmsg_level != SOL_SOCKET)
+    {
+        print_err("[%d]<%s:%d> cmsg_level != SOL_SOCKET\n", num_chld, __func__, __LINE__);
+        return -1;
+    }
+
+    if (cmsgp->cmsg_type != SCM_RIGHTS)
+    {
+        print_err("[%d]<%s:%d> cmsg_type != SCM_RIGHTS\n", num_chld, __func__, __LINE__);
+        return -1;
+    }
+
+    memcpy(&fd, CMSG_DATA(cmsgp), sizeof(int));
+    return fd;
+}
+//======================================================================
+int write_to_client(Connect *req, const char *buf, int len)
+{
+    int ret = send(req->clientSocket, buf, len, 0);
+    if (ret == -1)
+    {
+        print_err(req, "<%s:%d> Error send(): %s\n", __func__, __LINE__, strerror(errno));
+        if (errno == EAGAIN)
+            return ERR_TRY_AGAIN;
+        else 
+            return -1;
+    }
+    else
+        return  ret;
+}
+//======================================================================
+int read_from_client(Connect *req, char *buf, int len)
+{
+    int ret = recv(req->clientSocket, buf, len, 0);
+    if (ret == -1)
+    {
+        if (errno == EAGAIN)
+            return ERR_TRY_AGAIN;
+        else
+        {
+            print_err(req, "<%s:%d> Error recv(): %s\n", __func__, __LINE__, strerror(errno));
+            return -1;
+        }
+    }
+    else
+        return  ret;
+}
+//======================================================================
+int read_request_headers(Connect *req)
+{
+    int num_read = SIZE_BUF_REQUEST - req->req.len - 1;
+    if (num_read <= 0)
+        return -RS414;
+    int n = read_from_client(req, req->req.buf + req->req.len, num_read);
+    if (n < 0)
+    {
+        if (n == ERR_TRY_AGAIN)
+            return ERR_TRY_AGAIN;
+        return -1;
+    }
+    else if (n == 0)
+        return -1;
+
+    req->lenTail += n;
+    req->req.len += n;
+    req->req.buf[req->req.len] = 0;
+
+    n = find_empty_line(req);
+    if (n == 1) // empty line found
+        return req->req.len;
+    else if (n < 0) // error
+        return -1;
+
     return 0;
 }

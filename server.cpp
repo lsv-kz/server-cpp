@@ -9,11 +9,11 @@ int read_conf_file(const char *path_conf);
 int create_server_socket(const Config *conf);
 int unix_socket_pair(int sock[2]);
 int get_sock_buf(int domain, int optname, int type, int protocol);
-
 void free_fcgi_list();
 int set_uid();
-int main_proc();
-void create_proc(int);
+
+static int main_proc();
+static int read_from_pipe(int fd, char *buf, int len, int timeout);
 
 static string confPath;
 static string pidFile;
@@ -74,15 +74,25 @@ static void signal_handler(int sig)
         exit(0);
     }
     else if (sig == SIGUSR1)
-    {
-        fprintf(stderr, "<%s> ###### SIGUSR1 ######\n", __func__);
+    {// fprintf(stderr, 
+        print_err("<%s> ###### SIGUSR1 ######\n", __func__);
         restartServer = 1;
         closeChldProc = 1;
+        for (unsigned int i = 0; i < numCreatedProc; ++i)
+        {
+            char data[1] = "";
+            send_fd(unixFD[i][1], -1, data, sizeof(data));
+        }
     }
     else if (sig == SIGUSR2)
     {
         fprintf(stderr, "<%s> ###### SIGUSR2 ######\n", __func__);
         closeChldProc = 1;
+        for (unsigned int i = 0; i < numCreatedProc; ++i)
+        {
+            char data[1] = "";
+            send_fd(unixFD[i][1], -1, data, sizeof(data));
+        }
     }
     else
     {
@@ -186,11 +196,9 @@ void print_config()
          << "\n   SndBufSize           : " << conf->SndBufSize
          << "\n\n   NumCpuCores          : " << conf->NumCpuCores
          << "\n   MaxWorkConnections   : " << conf->MaxWorkConnections
-         << "\n   MaxEventConnections  : " << conf->MaxEventConnections
          << "\n   TimeoutPoll          : " << conf->TimeoutPoll
          << "\n\n   NumProc              : " << conf->NumProc
-         << "\n   MaxThreads           : " << conf->MaxThreads
-         << "\n   MimThreads           : " << conf->MinThreads
+         << "\n   NumThreads           : " << conf->NumThreads
          << "\n   MaxCgiProc           : " << conf->MaxCgiProc
          << "\n\n   MaxRequestsPerClient : " << conf->MaxRequestsPerClient
          << "\n   TimeoutKeepAlive     : " << conf->TimeoutKeepAlive
@@ -387,7 +395,7 @@ int main_proc()
     cerr << "  uid=" << getuid() << "; gid=" << getgid() << "\n\n";
     cout << "  uid=" << getuid() << "; gid=" << getgid() << "\n\n";
     cerr << "   MaxWorkConnections: " << conf->MaxWorkConnections << ", NumCpuCores: " << conf->NumCpuCores << "\n";
-    cerr << "   SndBufSize: " << conf->SndBufSize << ", MaxEventConnections: " << conf->MaxEventConnections << "\n";
+    cerr << "   SndBufSize: " << conf->SndBufSize << "\n";
     //------------------------------------------------------------------
     for ( ; environ[0]; )
     {
@@ -424,6 +432,11 @@ int main_proc()
         {
             if (allConn == 0)
                 break;
+            /*for (unsigned int i = 0; i < numCreatedProc; ++i)
+            {
+                char data[1] = "";
+                send_fd(unixFD[i][1], -1, data, sizeof(data));
+            }*/
             numFD = 1;
         }
         else
@@ -451,29 +464,10 @@ int main_proc()
 
                 if (indexProc == i)
                 {
-                    if (numCreatedProc < conf->MaxNumProc)
-                    {
-                        pidChild[numCreatedProc] = create_child(numCreatedProc, from_chld, sndbuf);
-                        if (pidChild[numCreatedProc] < 0)
-                        {
-                            fprintf(stderr, "<%s:%d> Error create_child() %d\n", __func__, __LINE__, numCreatedProc);
-                            numFD = 1;
-                        }
-                        else
-                        {
-                            indexProc = numCreatedProc;
-                            ++numCreatedProc;
-                            numFD = 2;
-                        }
-                    }
-                    else
-                        numFD = 1;
+                    numFD = 1;
                     break;
                 }
             }
-
-            if (allConn == 0)
-                numFD = 2;
         }
 
         int ret_poll = poll(fdrd, numFD, -1);
@@ -542,11 +536,11 @@ int main_proc()
 
     for (unsigned int i = 0; i < numCreatedProc; ++i)
     {
-        char ch = i;
-        int ret = send_fd(unixFD[i][1], -1, &ch, 1);
-        if (ret < 0)
+        //char ch = i;
+        //int ret = send_fd(unixFD[i][1], -1, &ch, 1);
+        //if (ret < 0)
         {
-            fprintf(stderr, "<%s:%d> Error send_fd()\n", __func__, __LINE__);
+            //fprintf(stderr, "<%s:%d> Error send_fd()\n", __func__, __LINE__);
             if (kill(pidChild[i], SIGKILL))
             {
                 fprintf(stderr, "<%s:%d> Error: kill(%u, %u)\n", __func__, __LINE__, pidChild[i], SIGKILL);
@@ -654,4 +648,49 @@ pid_t create_child(int num_chld, int *from_chld, int sock_buf_size)
     }
 
     return pid;
+}
+//======================================================================
+int read_from_pipe(int fd, char *buf, int len, int timeout)
+{
+    int read_bytes = 0, ret;
+    struct pollfd fdrd;
+    char *p = buf;
+
+    fdrd.fd = fd;
+    fdrd.events = POLLIN;
+
+    while (len > 0)
+    {
+        ret = poll(&fdrd, 1, timeout * 1000);
+        if (ret == -1)
+        {
+            if (errno == EINTR)
+                continue;
+            return ret;
+        }
+        else if (!ret)
+            return 0;
+
+        if (fdrd.revents & POLLIN)
+        {
+            ret = read(fd, p, len);
+            if (ret == -1)
+            {
+                print_err("<%s:%d> Error read(): %s\n", __func__, __LINE__, strerror(errno));
+                return -1;
+            }
+            else if (ret == 0)
+                break;
+
+            p += ret;
+            len -= ret;
+            read_bytes += ret;
+        }
+        else if (fdrd.revents & POLLHUP)
+            break;
+        else
+            return -1;
+    }
+
+    return read_bytes;
 }

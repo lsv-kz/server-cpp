@@ -165,6 +165,143 @@ const char *get_str_http_prot(int i)
     return "";
 }
 //======================================================================
+const char *get_str_operation(OPERATION_TYPE n)
+{
+    switch (n)
+    {
+        case READ_REQUEST:
+            return "READ_REQUEST";
+        case SEND_RESP_HEADERS:
+            return "SEND_RESP_HEADERS";
+        case SEND_ENTITY:
+            return "SEND_ENTITY";
+        case DYN_PAGE:
+            return "DYN_PAGE";
+    }
+
+    return "?";
+}
+//======================================================================
+const char *get_cgi_operation(CGI_OPERATION n)
+{
+    switch (n)
+    {
+        case CGI_CREATE_PROC:
+            return "CGI_CREATE_PROC";
+        case CGI_STDIN:
+            return "CGI_STDIN";
+        case CGI_READ_HTTP_HEADERS:
+            return "CGI_READ_HTTP_HEADERS";
+        case CGI_SEND_HTTP_HEADERS:
+            return "CGI_SEND_HTTP_HEADERS";
+        case CGI_SEND_ENTITY:
+            return "CGI_SEND_ENTITY";
+    }
+
+    return "?";
+}
+//======================================================================
+const char *get_fcgi_operation(FCGI_OPERATION n)
+{
+    switch (n)
+    {
+        case FASTCGI_CONNECT:
+            return "FASTCGI_CONNECT";
+        case FASTCGI_BEGIN:
+            return "FASTCGI_BEGIN";
+        case FASTCGI_PARAMS:
+            return "FASTCGI_PARAMS";
+        case FASTCGI_STDIN:
+            return "FASTCGI_STDIN";
+        case FASTCGI_READ_HTTP_HEADERS:
+            return "FASTCGI_READ_HTTP_HEADERS";
+        case FASTCGI_SEND_HTTP_HEADERS:
+            return "FASTCGI_SEND_HTTP_HEADERS";
+        case FASTCGI_SEND_ENTITY:
+            return "FASTCGI_SEND_ENTITY";
+        case FASTCGI_READ_ERROR:
+            return "FASTCGI_READ_ERROR";
+        case FASTCGI_CLOSE:
+            return "FASTCGI_CLOSE";
+    }
+
+    return "?";
+}
+//======================================================================
+const char *get_fcgi_status(FCGI_STATUS n)
+{
+    switch (n)
+    {
+        case FCGI_READ_DATA:
+            return "FCGI_READ_DATA";
+        case FCGI_READ_HEADER:
+            return "FCGI_READ_HEADER";
+        case FCGI_READ_PADDING:
+            return "FCGI_READ_PADDING";
+    }
+
+    return "?";
+}
+//======================================================================
+const char *get_scgi_operation(SCGI_OPERATION n)
+{
+    switch (n)
+    {
+        case SCGI_CONNECT:
+            return "SCGI_CONNECT";
+        case SCGI_PARAMS:
+            return "SCGI_PARAMS";
+        case SCGI_STDIN:
+            return "SCGI_STDIN";
+        case SCGI_READ_HTTP_HEADERS:
+            return "SCGI_READ_HTTP_HEADERS";
+        case SCGI_SEND_HTTP_HEADERS:
+            return "SCGI_SEND_HTTP_HEADERS";
+        case SCGI_SEND_ENTITY:
+            return "SCGI_SEND_ENTITY";
+    }
+
+    return "?";
+}
+//======================================================================
+const char *get_cgi_type(CGI_TYPE n)
+{
+    switch (n)
+    {
+        case NO_CGI:
+            return "NO_CGI";
+        case CGI:
+            return "CGI";
+        case PHPCGI:
+            return "PHPCGI";
+        case PHPFPM:
+            return "PHPFPM";
+        case FASTCGI:
+            return "FASTCGI";
+        case SCGI:
+            return "SCGI";
+    }
+
+    return "?";
+}
+//======================================================================
+const char *get_cgi_dir(DIRECT n)
+{
+    switch (n)
+    {
+        case FROM_CGI:
+            return "FROM_CGI";
+        case TO_CGI:
+            return "TO_CGI";
+        case FROM_CLIENT:
+            return "FROM_CLIENT";
+        case TO_CLIENT:
+            return "TO_CLIENT";
+    }
+
+    return "?";
+}
+//======================================================================
 const char *istextfile_(FILE *f)
 {
     int cnt, i;
@@ -675,6 +812,93 @@ int parse_headers(Connect *req, char *pName, int i)
     }
 
     req->reqHdValue[i] = pVal;
+
+    return 0;
+}
+//======================================================================
+int find_empty_line(Connect *req)
+{
+    req->timeout = conf->Timeout;
+    char *pCR, *pLF;
+    while (req->lenTail > 0)
+    {
+        int i = 0, len_line = 0;
+        pCR = pLF = NULL;
+        while (i < req->lenTail)
+        {
+            char ch = *(req->p_newline + i);
+            if (ch == '\r')// found CR
+            {
+                if (i == (req->lenTail - 1))
+                    return 0;
+                if (pCR)
+                    return -RS400;
+                pCR = req->p_newline + i;
+            }
+            else if (ch == '\n')// found LF
+            {
+                pLF = req->p_newline + i;
+                if ((pCR) && ((pLF - pCR) != 1))
+                    return -RS400;
+                i++;
+                break;
+            }
+            else
+                len_line++;
+            i++;
+        }
+
+        if (pLF) // found end of line '\n'
+        {
+            if (pCR == NULL)
+                *pLF = 0;
+            else
+                *pCR = 0;
+
+            if (len_line == 0) // found empty line
+            {
+                if (req->countReqHeaders == 0) // empty lines before Starting Line
+                {
+                    if ((pLF - req->req.buf + 1) > 4) // more than two empty lines
+                        return -RS400;
+                    req->lenTail -= i;
+                    req->p_newline = pLF + 1;
+                    continue;
+                }
+
+                if (req->lenTail > 0) // tail after empty line (Message Body for POST method)
+                {
+                    req->tail = pLF + 1;
+                    req->lenTail -= i;
+                }
+                else
+                    req->tail = NULL;
+                return 1;
+            }
+
+            if (req->countReqHeaders < MAX_HEADERS)
+            {
+                req->reqHdName[req->countReqHeaders] = req->p_newline;
+                if (req->countReqHeaders == 0)
+                {
+                    int ret = parse_startline_request(req, req->reqHdName[0]);
+                    if (ret < 0)
+                        return ret;
+                }
+
+                req->countReqHeaders++;
+            }
+            else
+                return -RS500;
+
+            req->lenTail -= i;
+            req->p_newline = pLF + 1;
+        }
+        else if (pCR && (!pLF))
+            return -RS400;
+        else
+            break;
+    }
 
     return 0;
 }

@@ -1,4 +1,4 @@
-#include "classes.h"
+#include "main.h"
 
 using namespace std;
 //======================================================================
@@ -61,44 +61,22 @@ int cmp(const void *a, const void *b)
     return i;
 }
 //======================================================================
-int index_chunked(Connect *req, char **list, int numFiles, string& path)
+int create_index_html(Connect *r, char **list, int numFiles, string& path)
 {
     const int len_path = path.size();
     int n, i;
     long long size;
     struct stat st;
-    int chunk;
-    if (req->reqMethod == M_HEAD)
-        chunk = NO_SEND;
-    else
-        chunk = ((req->httpProt == HTTP11) && req->connKeepAlive) ? SEND_CHUNK : SEND_NO_CHUNK;
 
-    ClChunked chunk_buf(req, chunk);
-
-    req->respStatus = RS200;
-    String hdrs(64);
-
-    if (chunk == SEND_CHUNK)
-    {
-        hdrs << "Transfer-Encoding: chunked\r\n";
-    }
-
-    hdrs << "Content-Type: text/html\r\n";
-    req->respContentLength = -1;
-
-    if (chunk)
-    {
-        if (send_response_headers(req, &hdrs))
-        {
-            return -1;
-        }
-    }
+    if (r->reqMethod == M_HEAD)
+        return 0;
+    r->html.s = "";
     //------------------------------------------------------------------
-    chunk_buf << "<!DOCTYPE HTML>\r\n"
+    r->html.s << "<!DOCTYPE HTML>\r\n"
             "<html>\r\n"
             " <head>\r\n"
             "  <meta charset=\"UTF-8\">\r\n"
-            "  <title>Index of " << req->decodeUri << " (ch)</title>\r\n"
+            "  <title>Index of " << r->decodeUri << " (ch)</title>\r\n"
             "  <style>\r\n"
             "    body {\r\n"
             "     margin-left:100px; margin-right:50px;\r\n"
@@ -107,24 +85,14 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
             "  <link href=\"/styles.css\" type=\"text/css\" rel=\"stylesheet\">\r\n"
             " </head>\r\n"
             " <body id=\"top\">\r\n"
-            "  <h3>Index of " << req->decodeUri << "</h3>\r\n"
+            "  <h3>Index of " << r->decodeUri << "</h3>\r\n"
             "  <table border=\"0\" width=\"100\%\">\r\n"
             "   <tr><td><h3>Directories</h3></td></tr>\r\n";
-    if (chunk_buf.error())
-    {
-        print_err("<%s:%d>   Error chunk\n", __func__, __LINE__);
-        return -1;
-    }
     //------------------------------------------------------------------
-    if (!strcmp(req->decodeUri, "/"))
-        chunk_buf << "   <tr><td></td></tr>\r\n";
+    if (!strcmp(r->decodeUri, "/"))
+        r->html.s << "   <tr><td></td></tr>\r\n";
     else
-        chunk_buf << "   <tr><td><a href=\"../\">Parent Directory/</a></td></tr>\r\n";
-    if (chunk_buf.error())
-    {
-        print_err(req, "<%s:%d>   Error chunk\n", __func__, __LINE__);
-        return -1;
-    }
+        r->html.s << "   <tr><td><a href=\"../\">Parent Directory/</a></td></tr>\r\n";
     //-------------------------- Directories ---------------------------
     for (i = 0; (i < numFiles); i++)
     {
@@ -137,25 +105,15 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
 
         if (!encode(list[i], buf, sizeof(buf)))
         {
-            print_err(req, "<%s:%d> Error: encode()\n", __func__, __LINE__);
+            print_err(r, "<%s:%d> Error: encode()\n", __func__, __LINE__);
             continue;
         }
 
-        chunk_buf << "   <tr><td><a href=\"" << buf << "/\">" << list[i] << "/</a></td></tr>\r\n";
-        if (chunk_buf.error())
-        {
-            print_err(req, "<%s:%d>   Error chunk\n", __func__, __LINE__);
-            return -1;
-        }
+        r->html.s << "   <tr><td><a href=\"" << buf << "/\">" << list[i] << "/</a></td></tr>\r\n";
     }
     //------------------------------------------------------------------
-    chunk_buf << "  </table>\r\n   <hr>\r\n  <table border=\"0\" width=\"100\%\">\r\n"
+    r->html.s << "  </table>\r\n   <hr>\r\n  <table border=\"0\" width=\"100\%\">\r\n"
                 "   <tr><td><h3>Files</h3></td><td></td></tr>\r\n";
-    if (chunk_buf.error())
-    {
-        print_err(req, "<%s:%d>   Error chunk\n", __func__, __LINE__);
-        return -1;
-    }
     //---------------------------- Files -------------------------------
     for (i = 0; i < numFiles; i++)
     {
@@ -170,32 +128,26 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
 
         if (!encode(list[i], buf, sizeof(buf)))
         {
-            print_err(req, "<%s:%d> Error: encode()\n", __func__, __LINE__);
+            print_err(r, "<%s:%d> Error: encode()\n", __func__, __LINE__);
             continue;
         }
 
         size = (long long)st.st_size;
 
         if (isimage(list[i]) && (conf->ShowMediaFiles == 'y'))
-            chunk_buf << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"100\"></a>" << list[i] << "</td>"
+            r->html.s << "   <tr><td><a href=\"" << buf << "\"><img src=\"" << buf << "\" width=\"100\"></a>" << list[i] << "</td>"
                       << "<td align=\"right\">" << size << " bytes</td></tr>\r\n";
         else if (isaudiofile(list[i]) && (conf->ShowMediaFiles == 'y'))
-            chunk_buf << "   <tr><td><audio preload=\"none\" controls src=\"" << buf << "\"></audio><a href=\""
+            r->html.s << "   <tr><td><audio preload=\"none\" controls src=\"" << buf << "\"></audio><a href=\""
                       << buf << "\">" << list[i] << "</a></td><td align=\"right\">" << size << " bytes</td></tr>\r\n";
         else
-            chunk_buf << "   <tr><td><a href=\"" << buf << "\">" << list[i] << "</a></td><td align=\"right\">"
+            r->html.s << "   <tr><td><a href=\"" << buf << "\">" << list[i] << "</a></td><td align=\"right\">"
                       << size << " bytes</td></tr>\r\n";
-
-        if (chunk_buf.error())
-        {
-            print_err(req, "<%s:%d>   Error chunk\n", __func__, __LINE__);
-            return -1;
-        }
     }
     //------------------------------------------------------------------
-    chunk_buf << "  </table>\r\n"
+    r->html.s << "  </table>\r\n"
               "  <hr>\r\n"
-              "  " << req->sTime << "\r\n"
+              "  " << r->sTime << "\r\n"
               "  <a href=\"#top\" style=\"display:block;\r\n"
               "         position:fixed;\r\n"
               "         bottom:30px;\r\n"
@@ -208,37 +160,15 @@ int index_chunked(Connect *req, char **list, int numFiles, string& path)
               "         color:black;\r\n"
               "         opacity: 0.7\">^</a>\r\n"
               " </body>\r\n"
-              "</html>\r\n";
-    if (chunk_buf.error())
-    {
-        print_err(req, "<%s:%d>   Error chunk\n", __func__, __LINE__);
-        return -1;
-    }
+              "</html>";
     //------------------------------------------------------------------
-    n = chunk_buf.end();
-    req->respContentLength = chunk_buf.all();
-    if (n < 0)
-    {
-        req->send_bytes = chunk_buf.all();
-        print_err(req, "<%s:%d>   Error chunk_buf.end(): %d\n", __func__, __LINE__, n);
-        return -1;
-    }
+    r->respContentLength = r->html.s.size();
+    r->respContentType = "text/html";
 
-    if (chunk == NO_SEND)
-    {
-        if (send_response_headers(req, &hdrs))
-        {
-            print_err("<%s:%d> Error send_header_response()\n", __func__, __LINE__);
-            return -1;
-        }
-    }
-    else
-        req->send_bytes = req->respContentLength;
-
-    return 0;
+    return r->respContentLength;
 }
 //======================================================================
-int index_dir(Connect *req, string& path)
+int index_dir(Connect *r, string& path)
 {
     DIR *dir;
     struct dirent *dirbuf;
@@ -255,7 +185,7 @@ int index_dir(Connect *req, string& path)
             return -RS403;
         else
         {
-            print_err(req, "<%s:%d>  Error opendir(\"%s\"): %s\n", __func__, __LINE__, path.c_str(), strerror(errno));
+            print_err(r, "<%s:%d>  Error opendir(\"%s\"): %s\n", __func__, __LINE__, path.c_str(), strerror(errno));
             return -RS500;
         }
     }
@@ -264,7 +194,7 @@ int index_dir(Connect *req, string& path)
     {
         if (numFiles >= maxNumFiles )
         {
-            print_err(req, "<%s:%d> number of files per directory >= %d\n", __func__, __LINE__, numFiles);
+            print_err(r, "<%s:%d> number of files per directory >= %d\n", __func__, __LINE__, numFiles);
             break;
         }
 
@@ -275,9 +205,27 @@ int index_dir(Connect *req, string& path)
     }
 
     qsort(list, numFiles, sizeof(char *), cmp);
-    ret = index_chunked(req, list, numFiles, path);
-
+    ret = create_index_html(r, list, numFiles, path);
     closedir(dir);
+    if (ret >= 0)
+    {
+        r->html.p = r->html.s.c_str();
+        r->html.len = r->html.s.size();
+
+        r->respStatus = RS200;
+        r->mode_send = NO_CHUNK;
+        if (create_response_headers(r))
+        {
+            print_err(r, "<%s:%d> Error create_response_headers()\n", __func__, __LINE__);
+            r->err = -1;
+            return -1;
+        }
+
+        r->resp_headers.p = r->resp_headers.s.c_str();
+        r->resp_headers.len = r->resp_headers.s.size();
+        push_send_html(r);
+        return 1;
+    }
 
     return ret;
 }
