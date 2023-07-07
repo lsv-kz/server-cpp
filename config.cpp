@@ -55,17 +55,16 @@ void create_conf_file(const char *path)
     fprintf(f, "TcpCork  n # y/n \n");
     fprintf(f, "TcpNoDelay  y \n\n");
 
-    fprintf(f, "DocumentRoot  ?\n");
-    fprintf(f, "ScriptPath  ?\n");
-    fprintf(f, "LogPath  ?\n");
-    fprintf(f, "PidFilePath  ?\n\n");
+    fprintf(f, "DocumentRoot  www/html\n");
+    fprintf(f, "ScriptPath  www/cgi-bin\n");
+    fprintf(f, "LogPath  www/logs\n");
+    fprintf(f, "PidFilePath  www/pid\n\n");
 
     fprintf(f, "SendFile  y\n");
     fprintf(f, "SndBufSize  32768\n\n");
 
-    fprintf(f, "NumCpuCores  1\n");
     fprintf(f, "MaxWorkConnections  768\n");
-
+    fprintf(f, "BalancedLoad  y  #n/y\n");
     fprintf(f, "NumProc  1\n");
     fprintf(f, "NumThreads  2\n");
     fprintf(f, "MaxCgiProc  15\n\n");
@@ -300,8 +299,6 @@ int read_conf_file(FILE *fconf)
                 c.SendFile = (char)tolower(s2[0]);
             else if ((s1 == "SndBufSize") && is_number(s2.c_str()))
                 s2 >> c.SndBufSize;
-            else if ((s1 == "NumCpuCores") && is_number(s2.c_str()))
-                s2 >> c.NumCpuCores;
             else if ((s1 == "MaxWorkConnections") && is_number(s2.c_str()))
                 s2 >> c.MaxWorkConnections;
             else if ((s1 == "TimeoutPoll") && is_number(s2.c_str()))
@@ -314,6 +311,8 @@ int read_conf_file(FILE *fconf)
                 s2 >> c.LogPath;
             else if (s1 == "PidFilePath")
                 s2 >> c.PidFilePath;
+            else if ((s1 == "BalancedLoad") && is_bool(s2.c_str()))
+                c.BalancedLoad = (char)tolower(s2[0]);
             else if ((s1 == "NumProc") && is_number(s2.c_str()))
                 s2 >> c.NumProc;
             else if ((s1 == "NumThreads") && is_number(s2.c_str()))
@@ -483,15 +482,20 @@ int read_conf_file(FILE *fconf)
         exit(1);
     }
     //------------------------------------------------------------------
+    if ((conf->NumProc < 1) || (conf->NumProc > PROC_LIMIT))
+    {
+        fprintf(stderr, "<%s:%d> Error: NumProc = %d; [1 <= NumProc <= 8]\n", __func__, __LINE__, conf->NumProc);
+        return -1;
+    }
+    
+    if (conf->NumProc == 1)
+        c.BalancedLoad = 'n';
+    //------------------------------------------------------------------
     if ((c.NumThreads > 6) || (c.NumThreads < 1))
     {
         fprintf(stderr, "<%s:%d> Error: NumThreads=%d\n", __func__, __LINE__, c.NumThreads);
         return -1;
     }
-    //------------------------------------------------------------------
-    //c.NumCpuCores = thread::hardware_concurrency();
-    if (c.NumCpuCores == 0)
-        c.NumCpuCores = 1;
     //------------------- Setting OPEN_MAX -----------------------------
     if (c.MaxWorkConnections <= 0)
     {

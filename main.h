@@ -48,11 +48,11 @@
 #define    SEND_FILE_
 #define    TCP_CORK_
 
-#define     MAX_PATH          2048
-#define     MAX_NAME           256
-#define     SIZE_BUF_REQUEST  8192
-#define     MAX_HEADERS         25
-const int  ERR_TRY_AGAIN = -1000;
+const int   MAX_PATH = 2048;
+const int   MAX_NAME = 256;
+const int   SIZE_BUF_REQUEST = 8192;
+const int   MAX_HEADERS = 25;
+const int   ERR_TRY_AGAIN = -1000;
 
 const char boundary[] = "---------a9b5r7a4c0a2d5a1b8r3a";
 
@@ -145,9 +145,9 @@ struct Config
     char SendFile;
     int SndBufSize;
 
-    unsigned int NumCpuCores;
-
     int MaxWorkConnections;
+
+    char BalancedLoad;
 
     unsigned int NumProc;
     unsigned int NumThreads;
@@ -348,7 +348,7 @@ public:
     RequestManager(unsigned int);
     ~RequestManager();
     //-------------------------------
-    int get_num_proc(void);
+    int get_num_proc();
     void push_resp_list(Connect *req);
     Connect *pop_resp_list();
     void close_manager();
@@ -364,9 +364,6 @@ void response1(int n_proc);
 int response2(Connect *req);
 int options(Connect *req);
 int index_dir(Connect *req, std::string& path);
-int cgi(Connect *req);
-int fcgi(Connect *req);
-int scgi(Connect *req);
 //----------------------------------------------------------------------
 int create_fcgi_socket(const char *host);
 int read_from_client(Connect *req, char *buf, int len);
@@ -415,8 +412,9 @@ void close_logs(void);
 void print_err(Connect *req, const char *format, ...);
 void print_log(Connect *req);
 //----------------------------------------------------------------------
-int timedwait_close_cgi();
-void cgi_dec();
+int timeout_cgi(Connect *r);
+int timeout_fcgi(Connect *r);
+int timeout_scgi(Connect *r);
 //----------------------------------------------------------------------
 void push_resp_list(Connect *r);
 Connect *pop_resp_list();

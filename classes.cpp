@@ -28,6 +28,8 @@ void Connect::init()
     cgi_type = NO_CGI;
     scriptName = "";
 
+    fcgi.fd = -1;
+
     hdrs = "";
     numPart = 0;
     respContentLength = -1LL;
@@ -209,7 +211,7 @@ void Ranges::parse_ranges(char *sRange)
             }
             else
             {
-                err =  RS416;
+                err = RS416;
                 return;
             }
         }

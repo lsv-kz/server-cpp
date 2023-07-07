@@ -38,17 +38,24 @@ class String
     //------------------------------------------------------------------
     void append(const char *s)
     {
-        buf += s;
+        if (s)
+            buf += s;
     }
     //------------------------------------------------------------------
     void append(char *s)
     {
-        buf += s;
+        if (s)
+            buf += s;
     }
     //------------------------------------------------------------------
     void append(std::string& arg)
     {
         buf += arg;
+    }
+    //------------------------------------------------------------------
+    void append(String& arg)
+    {
+        buf += arg.buf;
     }
     //------------------------------------------------------------------
     template <typename T>
@@ -132,9 +139,9 @@ public:
     String(){}
     explicit String(unsigned int n) { buf.reserve(n); }
     String(const String&) = delete;
-
-    String & operator >> (double&) = delete;
+    String& operator >> (double&) = delete;
     String& operator >> (char*) = delete;
+    String(const std::string& s) { buf = s; }
     //------------------------------------------------------------------
     String& operator << (BaseHex b)
     {
@@ -150,8 +157,11 @@ public:
     //------------------------------------------------------------------
     String & operator = (const char *s)
     {
-        buf.clear();
-        buf += s;
+        if (s)
+        {
+            buf.clear();
+            buf += s;
+        }
         return *this;
     }
     //------------------------------------------------------------------
@@ -159,6 +169,13 @@ public:
     {
         buf.clear();
         buf += s;
+        return *this;
+    }
+    //------------------------------------------------------------------
+    String& operator = (const String& s)
+    {
+        buf.clear();
+        buf += s.buf;
         return *this;
     }
     //------------------------------------------------------------------

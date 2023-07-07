@@ -8,7 +8,7 @@ int Connect::serverSocket;
 int read_conf_file(const char *path_conf);
 int create_server_socket(const Config *conf);
 int unix_socket_pair(int sock[2]);
-int get_sock_buf(int domain, int optname, int type, int protocol);
+int get_size_sock_buf(int domain, int optname, int type, int protocol);
 void free_fcgi_list();
 int set_uid();
 
@@ -24,7 +24,6 @@ static int numConn[PROC_LIMIT];
 static int startServer = 0, restartServer = 1;
 static int closeChldProc = 0;
 static unsigned int allConn = 0;
-static unsigned int numCreatedProc = 0;
 //======================================================================
 static void signal_handler(int sig)
 {
@@ -41,7 +40,7 @@ static void signal_handler(int sig)
         shutdown(sockServer, SHUT_RDWR);
         close(sockServer);
 
-        for (unsigned int i = 0; i < numCreatedProc; ++i)
+        for (unsigned int i = 0; i < conf->NumProc; ++i)
         {
             if (pidChild[i] > 0)
                 kill(pidChild[i], SIGKILL);
@@ -60,7 +59,7 @@ static void signal_handler(int sig)
         shutdown(sockServer, SHUT_RDWR);
         close(sockServer);
 
-        for (unsigned int i = 0; i < numCreatedProc; ++i)
+        for (unsigned int i = 0; i < conf->NumProc; ++i)
         {
             if (pidChild[i] > 0)
                 kill(pidChild[i], SIGKILL);
@@ -78,7 +77,7 @@ static void signal_handler(int sig)
         print_err("<%s> ###### SIGUSR1 ######\n", __func__);
         restartServer = 1;
         closeChldProc = 1;
-        for (unsigned int i = 0; i < numCreatedProc; ++i)
+        for (unsigned int i = 0; i < conf->NumProc; ++i)
         {
             char data[1] = "";
             send_fd(unixFD[i][1], -1, data, sizeof(data));
@@ -88,7 +87,7 @@ static void signal_handler(int sig)
     {
         fprintf(stderr, "<%s> ###### SIGUSR2 ######\n", __func__);
         closeChldProc = 1;
-        for (unsigned int i = 0; i < numCreatedProc; ++i)
+        for (unsigned int i = 0; i < conf->NumProc; ++i)
         {
             char data[1] = "";
             send_fd(unixFD[i][1], -1, data, sizeof(data));
@@ -102,7 +101,7 @@ static void signal_handler(int sig)
 //======================================================================
 pid_t create_child(int, int *, int);
 //======================================================================
-void create_proc(unsigned int NumProc, int from_chld[2], int *sndbuf)
+void create_proc(int NumProc, int from_chld[2], int *sndbuf)
 {
     if (pipe(from_chld) < 0)
     {
@@ -110,31 +109,31 @@ void create_proc(unsigned int NumProc, int from_chld[2], int *sndbuf)
         exit(1);
     }
     //------------------------------------------------------------------
-    *sndbuf = get_sock_buf(AF_UNIX, SO_SNDBUF, SOCK_DGRAM, 0);
+    *sndbuf = get_size_sock_buf(AF_UNIX, SO_SNDBUF, SOCK_DGRAM, 0);
     if (*sndbuf < 0)
     {
-        fprintf(stderr, " Error get_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-(*sndbuf)));
+        fprintf(stderr, " Error get_size_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-(*sndbuf)));
         *sndbuf = 0;
     }
     else
-        fprintf(stderr, " AF_UNIX: SO_SNDBUF=%d\n\n", *sndbuf);
+        fprintf(stderr, "   AF_UNIX: SO_SNDBUF=%d\n\n", *sndbuf);
 
     if (*sndbuf >= 163840)
         *sndbuf = 0;
     else
         *sndbuf = 163840;
 
-    numCreatedProc = 0;
-    while (numCreatedProc < NumProc)
+    int i = 0;
+    while (i < NumProc)
     {
-        pidChild[numCreatedProc] = create_child(numCreatedProc, from_chld, *sndbuf);
-        if (pidChild[numCreatedProc] < 0)
+        pidChild[i] = create_child(i, from_chld, *sndbuf);
+        if (pidChild[i] < 0)
         {
-            fprintf(stderr, "<%s:%d> Error create_child() %d\n", __func__, __LINE__, numCreatedProc);
+            fprintf(stderr, "<%s:%d> Error create_child() %d\n", __func__, __LINE__, i);
             exit(1);
         }
 
-        ++numCreatedProc;
+        ++i;
     }
 }
 //======================================================================
@@ -157,27 +156,27 @@ void print_limits()
         printf(" RLIMIT_NOFILE: cur=%ld, max=%ld\n\n", (long)lim.rlim_cur, (long)lim.rlim_max);
     printf(" hardware_concurrency(): %u\n\n", thread::hardware_concurrency());
     //------------------------------------------------------------------
-    int sbuf = get_sock_buf(AF_INET, SO_SNDBUF, SOCK_STREAM, 0);
+    int sbuf = get_size_sock_buf(AF_INET, SO_SNDBUF, SOCK_STREAM, 0);
     if (sbuf < 0)
-        fprintf(stderr, " Error get_sock_buf(AF_INET, SOCK_STREAM, 0): %s\n", strerror(-sbuf));
+        fprintf(stderr, " Error get_size_sock_buf(AF_INET, SOCK_STREAM, 0): %s\n", strerror(-sbuf));
     else
         fprintf(stdout, " AF_INET: SO_SNDBUF=%d\n", sbuf);
 
-    sbuf = get_sock_buf(AF_INET, SO_RCVBUF, SOCK_STREAM, 0);
+    sbuf = get_size_sock_buf(AF_INET, SO_RCVBUF, SOCK_STREAM, 0);
     if (sbuf < 0)
-        fprintf(stderr, " Error get_sock_buf(AF_INET, SOCK_STREAM, 0): %s\n", strerror(-sbuf));
+        fprintf(stderr, " Error get_size_sock_buf(AF_INET, SOCK_STREAM, 0): %s\n", strerror(-sbuf));
     else
         fprintf(stdout, " AF_INET: SO_RCVBUF=%d\n\n", sbuf);
     //------------------------------------------------------------------
-    sbuf = get_sock_buf(AF_UNIX, SO_SNDBUF, SOCK_DGRAM, 0);
+    sbuf = get_size_sock_buf(AF_UNIX, SO_SNDBUF, SOCK_DGRAM, 0);
     if (sbuf < 0)
-        fprintf(stderr, " Error get_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-sbuf));
+        fprintf(stderr, " Error get_size_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-sbuf));
     else
         fprintf(stdout, " AF_UNIX: SO_SNDBUF=%d\n", sbuf);
 
-    sbuf = get_sock_buf(AF_UNIX, SO_RCVBUF, SOCK_DGRAM, 0);
+    sbuf = get_size_sock_buf(AF_UNIX, SO_RCVBUF, SOCK_DGRAM, 0);
     if (sbuf < 0)
-        fprintf(stderr, " Error get_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-sbuf));
+        fprintf(stderr, " Error get_size_sock_buf(AF_UNIX, SOCK_DGRAM, 0): %s\n\n", strerror(-sbuf));
     else
         fprintf(stdout, " AF_UNIX: SO_RCVBUF=%d\n\n", sbuf);
 }
@@ -194,9 +193,10 @@ void print_config()
          << "\n   TcpNoDelay           : " << conf->TcpNoDelay
          << "\n\n   SendFile             : " << conf->SendFile
          << "\n   SndBufSize           : " << conf->SndBufSize
-         << "\n\n   NumCpuCores          : " << conf->NumCpuCores
+         << "\n\n   NumCpuCores          : " << thread::hardware_concurrency()
          << "\n   MaxWorkConnections   : " << conf->MaxWorkConnections
          << "\n   TimeoutPoll          : " << conf->TimeoutPoll
+         << "\n\n   BalancedLoad         : " << conf->BalancedLoad
          << "\n\n   NumProc              : " << conf->NumProc
          << "\n   NumThreads           : " << conf->NumThreads
          << "\n   MaxCgiProc           : " << conf->MaxCgiProc
@@ -394,8 +394,8 @@ int main_proc()
          << "\" run, port: " << conf->ServerPort.c_str() << "\n";
     cerr << "  uid=" << getuid() << "; gid=" << getgid() << "\n\n";
     cout << "  uid=" << getuid() << "; gid=" << getgid() << "\n\n";
-    cerr << "   MaxWorkConnections: " << conf->MaxWorkConnections << ", NumCpuCores: " << conf->NumCpuCores << "\n";
-    cerr << "   SndBufSize: " << conf->SndBufSize << "\n";
+    cerr << "   NumCpuCores: " << thread::hardware_concurrency()  << "\n   BalancedLoad: " << conf->BalancedLoad
+         << "\n   MaxWorkConnections: " << conf->MaxWorkConnections << "\n   SndBufSize: " << conf->SndBufSize << "\n";
     //------------------------------------------------------------------
     for ( ; environ[0]; )
     {
@@ -432,23 +432,18 @@ int main_proc()
         {
             if (allConn == 0)
                 break;
-            /*for (unsigned int i = 0; i < numCreatedProc; ++i)
-            {
-                char data[1] = "";
-                send_fd(unixFD[i][1], -1, data, sizeof(data));
-            }*/
             numFD = 1;
         }
         else
         {
-            if (conf->NumCpuCores == 1)
-                indexProc = 0;
-            else
+            if (conf->BalancedLoad == 'y')
             {
                 indexProc++;
-                if (indexProc >= numCreatedProc)
+                if (indexProc >= conf->NumProc)
                     indexProc = 0;
             }
+            else
+                indexProc = 0;
 
             for (unsigned int i = indexProc; ; )
             {
@@ -459,7 +454,7 @@ int main_proc()
                 }
 
                 indexProc++;
-                if (indexProc >= numCreatedProc)
+                if (indexProc >= conf->NumProc)
                     indexProc = 0;
 
                 if (indexProc == i)
@@ -510,10 +505,10 @@ int main_proc()
             if (ret < 0)
             {
                 if (ret == -ENOBUFS)
-                    print_err("<%s:%d> Error send_fd: ENOBUFS\n", __func__, __LINE__);
+                    print_err("[%d]<%s:%d> Error send_fd: ENOBUFS\n", indexProc, __func__, __LINE__);
                 else
                 {
-                    print_err("<%s:%d> Error send_fd()\n", __func__, __LINE__);
+                    print_err("[%d]<%s:%d> Error send_fd()\n", indexProc, __func__, __LINE__);
                     break;
                 }
             }
@@ -534,13 +529,13 @@ int main_proc()
         }
     }
 
-    for (unsigned int i = 0; i < numCreatedProc; ++i)
+    for (unsigned int i = 0; i < conf->NumProc; ++i)
     {
-        //char ch = i;
-        //int ret = send_fd(unixFD[i][1], -1, &ch, 1);
-        //if (ret < 0)
+        char ch = i;
+        int ret = send_fd(unixFD[i][1], -1, &ch, 1);
+        if (ret < 0)
         {
-            //fprintf(stderr, "<%s:%d> Error send_fd()\n", __func__, __LINE__);
+            fprintf(stderr, "<%s:%d> Error send_fd()\n", __func__, __LINE__);
             if (kill(pidChild[i], SIGKILL))
             {
                 fprintf(stderr, "<%s:%d> Error: kill(%u, %u)\n", __func__, __LINE__, pidChild[i], SIGKILL);

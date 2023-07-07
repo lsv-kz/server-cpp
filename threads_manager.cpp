@@ -1,10 +1,10 @@
 #include "main.h"
 
 using namespace std;
-
+//======================================================================
 static mutex mtx_conn;
 static condition_variable cond_close_conn;
-static int num_conn = 0, close_conn = 0;
+static int num_conn = 0;
 //======================================================================
 RequestManager::RequestManager(unsigned int n)
 {
@@ -45,7 +45,6 @@ unique_lock<mutex> lk(mtx_list);
     {
         cond_list.wait(lk);
     }
-
     if (stop_manager)
         return NULL;
 
@@ -76,7 +75,6 @@ mtx_conn.unlock();
 //======================================================================
 void wait_close_all_conn()
 {
-    //close_conn = 1;
 unique_lock<mutex> lk(mtx_conn);
     while (num_conn > 0)
     {
@@ -89,12 +87,12 @@ static int nProc;
 //======================================================================
 void end_response(Connect *req)
 {
-    if (req->connKeepAlive == 0 || (req->err < 0) || close_conn)
+    if (req->connKeepAlive == 0 || (req->err < 0))
     { // ----- Close connect -----
         if (req->err <= -RS101)
         {
             req->respStatus = -req->err;
-            req->err = -1;
+            req->err = 0;
             req->hdrs = "";
             if (send_message(req, NULL) == 1)
                 return;
