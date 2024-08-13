@@ -42,7 +42,7 @@ void fcgi_worker(Connect* r);
 void scgi_worker(Connect* r);
 
 int cgi_set_size_chunk(Connect *r);
-int cgi_create_pipes(Connect *req);
+int cgi_create_proc(Connect *req);
 
 int fcgi_create_connect(Connect *req);
 int scgi_create_connect(Connect *req);
@@ -142,23 +142,23 @@ int send_part_file(Connect *req)
 //======================================================================
 void del_from_list(Connect *r)
 {
-    if ((r->operation == DYN_PAGE) && r->cgi)
+    if (r->operation == DYN_PAGE)
     {
         if ((r->cgi_type == CGI) || 
             (r->cgi_type == PHPCGI))
         {
-            if (r->cgi->from_script > 0)
+            if (r->cgi.from_script > 0)
             {
-                close(r->cgi->from_script);
-                r->cgi->from_script = -1;
+                close(r->cgi.from_script);
+                r->cgi.from_script = -1;
             }
     
-            if (r->cgi->to_script > 0)
+            if (r->cgi.to_script > 0)
             {
-                close(r->cgi->to_script);
-                r->cgi->to_script = -1;
+                close(r->cgi.to_script);
+                r->cgi.to_script = -1;
             }
-            
+
             wait_pid(r);
         }
         else if ((r->cgi_type == PHPFPM) || 
@@ -171,9 +171,7 @@ void del_from_list(Connect *r)
                 close(r->fcgi.fd);
             }
         }
-        
-        delete r->cgi;
-        r->cgi = NULL;
+
         r->scriptName = "";
     mtx_.lock();
         --cgi_work;
@@ -236,23 +234,13 @@ mtx_cgi.lock();
                 cgi_wait_list_start = NULL;
             --cgi_wait;
             //--------------------------
-            r->cgi = new (nothrow) Cgi;
-            if (!r->cgi)
-            {
-                r->err = -RS500;
-                end_response(r);
-                continue;
-            }
-
             if ((r->cgi_type == CGI) || (r->cgi_type == PHPCGI))
             {
-                int ret = cgi_create_pipes(r);
+                int ret = cgi_create_proc(r);
                 if (ret < 0)
                 {
                     print_err(r, "<%s:%d> Error cgi_create_pipes()=%d\n", __func__, __LINE__, ret);
                     r->err = ret;
-                    delete r->cgi;
-                    r->cgi = NULL;
                     end_response(r);
                     continue;
                 }
@@ -416,14 +404,14 @@ static int worker(int num_chld)
                         {
                             case CGI:
                             case PHPCGI:
-                                if ((r->cgi->op.cgi == CGI_SEND_ENTITY) && (r->cgi->dir == FROM_CGI))
+                                if ((r->cgi.op.cgi == CGI_SEND_ENTITY) && (r->io_direct == FROM_CGI))
                                 {
                                     if (r->mode_send == CHUNK)
                                     {
-                                        r->cgi->len_buf = 0;
-                                        r->cgi->p = r->cgi->buf + 8;
+                                        r->cgi.len_buf = 0;
+                                        r->cgi.p = r->cgi.buf + 8;
                                         cgi_set_size_chunk(r);
-                                        r->cgi->dir = TO_CLIENT;
+                                        r->io_direct = TO_CLIENT;
                                         r->mode_send = CHUNK_END;
                                         r->sock_timer = 0;
                                     }
@@ -436,8 +424,8 @@ static int worker(int num_chld)
                                 else
                                 {
                                     print_err(r, "<%s:%d> Error: events=0x%x(0x%x), %s/%s\n", __func__, __LINE__, 
-                                           poll_fd[i].events, poll_fd[i].revents, get_cgi_operation(r->cgi->op.cgi), get_cgi_dir(r->cgi->dir));
-                                    if (r->cgi->op.cgi <= CGI_READ_HTTP_HEADERS)
+                                           poll_fd[i].events, poll_fd[i].revents, get_cgi_operation(r->cgi.op.cgi), get_cgi_dir(r->io_direct));
+                                    if (r->cgi.op.cgi <= CGI_READ_HTTP_HEADERS)
                                         r->err = -RS502;
                                     else
                                         r->err = -1;
@@ -449,7 +437,7 @@ static int worker(int num_chld)
                             case FASTCGI:
                                 print_err(r, "<%s:%d> Error: events=0x%x(0x%x)\n", 
                                             __func__, __LINE__, poll_fd[i].events, poll_fd[i].revents);
-                                if (r->cgi->op.fcgi <= FASTCGI_READ_HTTP_HEADERS)
+                                if (r->cgi.op.fcgi <= FASTCGI_READ_HTTP_HEADERS)
                                     r->err = -RS502;
                                 else
                                     r->err = -1;
@@ -457,14 +445,14 @@ static int worker(int num_chld)
                                 end_response(r);
                                 break;
                             case SCGI:
-                                if ((r->cgi->op.scgi == SCGI_SEND_ENTITY) && (r->cgi->dir == FROM_CGI))
+                                if ((r->cgi.op.scgi == SCGI_SEND_ENTITY) && (r->io_direct == FROM_CGI))
                                 {
                                     if (r->mode_send == CHUNK)
                                     {
-                                        r->cgi->len_buf = 0;
-                                        r->cgi->p = r->cgi->buf + 8;
+                                        r->cgi.len_buf = 0;
+                                        r->cgi.p = r->cgi.buf + 8;
                                         cgi_set_size_chunk(r);
-                                        r->cgi->dir = TO_CLIENT;
+                                        r->io_direct = TO_CLIENT;
                                         r->mode_send = CHUNK_END;
                                         r->sock_timer = 0;
                                     }
@@ -478,7 +466,7 @@ static int worker(int num_chld)
                                 {
                                     print_err(r, "<%s:%d> Error: events=0x%x(0x%x)\n", 
                                             __func__, __LINE__, poll_fd[i].events, poll_fd[i].revents);
-                                    if (r->cgi->op.scgi <= SCGI_READ_HTTP_HEADERS)
+                                    if (r->cgi.op.scgi <= SCGI_READ_HTTP_HEADERS)
                                         r->err = -RS502;
                                     else
                                         r->err = -1;
@@ -579,6 +567,7 @@ void push_cgi(Connect *r)
     r->respStatus = RS200;
     r->sock_timer = 0;
     r->prev = NULL;
+    r->cgi.pid = -1;
 mtx_cgi.lock();
     r->next = cgi_wait_list_start;
     if (cgi_wait_list_start)
@@ -893,7 +882,7 @@ static void worker(Connect *r)
                 r->io_status = POLL;
             else
             {
-                r->err = -1;
+                r->err = ret;
                 del_from_list(r);
                 end_response(r);
             }

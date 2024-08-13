@@ -103,7 +103,6 @@ union OPERATION { CGI_OPERATION cgi; FCGI_OPERATION fcgi; SCGI_OPERATION scgi;};
 struct Cgi
 {
     OPERATION op;
-    DIRECT dir;
     char buf[8 + 4096 + 8];
     int  size_buf = 4096;
     long len_buf;
@@ -221,6 +220,7 @@ public:
     int  event;
     OPERATION_TYPE operation;
     IO_STATUS    io_status;
+    DIRECT io_direct;
 
     char  remoteAddr[NI_MAXHOST];
     char  remotePort[NI_MAXSERV];
@@ -285,7 +285,7 @@ public:
     
     String scriptName;
     CGI_TYPE cgi_type;
-    Cgi *cgi;
+    Cgi cgi;
     
     struct
     {
@@ -411,10 +411,6 @@ void create_logfiles(const std::string &);
 void close_logs(void);
 void print_err(Connect *req, const char *format, ...);
 void print_log(Connect *req);
-//----------------------------------------------------------------------
-int timeout_cgi(Connect *r);
-int timeout_fcgi(Connect *r);
-int timeout_scgi(Connect *r);
 //----------------------------------------------------------------------
 void push_resp_list(Connect *r);
 Connect *pop_resp_list();

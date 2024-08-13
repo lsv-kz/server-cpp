@@ -24,7 +24,6 @@ void Connect::init()
     respStatus = 0;
     mode_send = NO_CHUNK;
 
-    cgi = NULL;
     cgi_type = NO_CGI;
     scriptName = "";
 

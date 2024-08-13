@@ -15,9 +15,9 @@ int cgi_stdout(Connect *req);
 //======================================================================
 int scgi_set_size_data(Connect* r)
 {
-    int size = r->cgi->len_buf;
+    int size = r->cgi.len_buf;
     int i = 7;
-    char *p = r->cgi->buf;
+    char *p = r->cgi.buf;
     p[i--] = ':';
     
     for ( ; i >= 0; --i)
@@ -31,17 +31,17 @@ int scgi_set_size_data(Connect* r)
     if (size != 0)
         return -1;
 
-    r->cgi->buf[8 + r->cgi->len_buf] = ',';
-    r->cgi->p = r->cgi->buf + i;
-    r->cgi->len_buf += (8 - i + 1);
+    r->cgi.buf[8 + r->cgi.len_buf] = ',';
+    r->cgi.p = r->cgi.buf + i;
+    r->cgi.len_buf += (8 - i + 1);
 
     return 0;
 }
 //======================================================================
 int scgi_create_connect(Connect *req)
 {
-    req->cgi->op.scgi = SCGI_CONNECT;
-    req->cgi->dir = TO_CGI;
+    req->cgi.op.scgi = SCGI_CONNECT;
+    req->io_direct = TO_CGI;
     if (req->reqMethod == M_POST)
     {
         if (req->req_hd.iReqContentType < 0)
@@ -218,9 +218,9 @@ int scgi_create_connect(Connect *req)
     req->fcgi.size_par = i;
     req->fcgi.i_param = 0;
     
-    req->cgi->op.scgi = SCGI_PARAMS;
-    req->cgi->dir = TO_CGI;
-    req->cgi->len_buf = 0;
+    req->cgi.op.scgi = SCGI_PARAMS;
+    req->io_direct = TO_CGI;
+    req->cgi.len_buf = 0;
     req->sock_timer = 0;
     
     int ret = scgi_set_param(req);
@@ -235,8 +235,8 @@ int scgi_create_connect(Connect *req)
 //======================================================================
 int scgi_set_param(Connect *r)
 {
-    r->cgi->len_buf = 0;
-    r->cgi->p = r->cgi->buf + 8;
+    r->cgi.len_buf = 0;
+    r->cgi.p = r->cgi.buf + 8;
 
     for ( ; r->fcgi.i_param < r->fcgi.size_par; ++r->fcgi.i_param)
     {
@@ -250,27 +250,27 @@ int scgi_set_param(Connect *r)
         int len_val = r->fcgi.vPar[r->fcgi.i_param].val.size();
         int len = len_name + len_val + 2;
 
-        if (len > (r->cgi->size_buf - r->cgi->len_buf))
+        if (len > (r->cgi.size_buf - r->cgi.len_buf))
         {
             break;
         }
 
-        memcpy(r->cgi->p, r->fcgi.vPar[r->fcgi.i_param].name.c_str(), len_name);
-        r->cgi->p += len_name;
+        memcpy(r->cgi.p, r->fcgi.vPar[r->fcgi.i_param].name.c_str(), len_name);
+        r->cgi.p += len_name;
         
-        memcpy(r->cgi->p, "\0", 1);
-        r->cgi->p += 1;
+        memcpy(r->cgi.p, "\0", 1);
+        r->cgi.p += 1;
 
         if (len_val > 0)
         {
-            memcpy(r->cgi->p, r->fcgi.vPar[r->fcgi.i_param].val.c_str(), len_val);
-            r->cgi->p += len_val;
+            memcpy(r->cgi.p, r->fcgi.vPar[r->fcgi.i_param].val.c_str(), len_val);
+            r->cgi.p += len_val;
         }
 
-        memcpy(r->cgi->p, "\0", 1);
-        r->cgi->p += 1;
+        memcpy(r->cgi.p, "\0", 1);
+        r->cgi.p += 1;
 
-        r->cgi->len_buf += len;
+        r->cgi.len_buf += len;
     }
     
     if(r->fcgi.i_param < r->fcgi.size_par)
@@ -279,7 +279,7 @@ int scgi_set_param(Connect *r)
         return -RS502;
     }
 
-    if (r->cgi->len_buf > 0)
+    if (r->cgi.len_buf > 0)
     {      
         scgi_set_size_data(r);
     }
@@ -289,12 +289,12 @@ int scgi_set_param(Connect *r)
         return -RS502;
     }
 
-    return r->cgi->len_buf;
+    return r->cgi.len_buf;
 }
 //======================================================================
 void scgi_worker(Connect* r)
 {
-    if (r->cgi->op.scgi == SCGI_PARAMS)
+    if (r->cgi.op.scgi == SCGI_PARAMS)
     {
         int ret = write_to_fcgi(r);
         if (ret < 0)
@@ -312,37 +312,37 @@ void scgi_worker(Connect* r)
         }
 
         r->sock_timer = 0;
-        if (r->cgi->len_buf == 0)
+        if (r->cgi.len_buf == 0)
         {
             if (r->req_hd.reqContentLength > 0)
             {
-                r->cgi->len_post = r->req_hd.reqContentLength - r->lenTail;
-                r->cgi->op.scgi = SCGI_STDIN;
+                r->cgi.len_post = r->req_hd.reqContentLength - r->lenTail;
+                r->cgi.op.scgi = SCGI_STDIN;
                 if (r->lenTail > 0)
                 {
-                    r->cgi->dir = TO_CGI;
-                    r->cgi->p = r->tail;
-                    r->cgi->len_buf = r->lenTail;
+                    r->io_direct = TO_CGI;
+                    r->cgi.p = r->tail;
+                    r->cgi.len_buf = r->lenTail;
                     r->tail = NULL;
                     r->lenTail = 0;
                 }
                 else
                 {
-                    r->cgi->dir = FROM_CLIENT;
+                    r->io_direct = FROM_CLIENT;
                 }
             }
             else
             {
-                r->cgi->op.scgi = SCGI_READ_HTTP_HEADERS;
-                r->cgi->dir = FROM_CGI;
+                r->cgi.op.scgi = SCGI_READ_HTTP_HEADERS;
+                r->io_direct = FROM_CGI;
                 r->tail = NULL;
                 r->lenTail = 0;
-                r->p_newline = r->cgi->p = r->cgi->buf + 8;
-                r->cgi->len_buf = 0;
+                r->p_newline = r->cgi.p = r->cgi.buf + 8;
+                r->cgi.len_buf = 0;
             }
         }
     }
-    else if (r->cgi->op.scgi == SCGI_STDIN)
+    else if (r->cgi.op.scgi == SCGI_STDIN)
     {
         int ret = cgi_stdin(r);
         if (ret < 0)
@@ -361,7 +361,7 @@ void scgi_worker(Connect* r)
     }
     else //==================== SCGI_STDOUT=============================
     {
-        if (r->cgi->op.scgi == SCGI_READ_HTTP_HEADERS)
+        if (r->cgi.op.scgi == SCGI_READ_HTTP_HEADERS)
         {
             int ret = cgi_read_http_headers(r);
             if (ret < 0)
@@ -389,15 +389,15 @@ void scgi_worker(Connect* r)
                 {
                     r->resp_headers.p = r->resp_headers.s.c_str();
                     r->resp_headers.len = r->resp_headers.s.size();
-                    r->cgi->op.scgi = SCGI_SEND_HTTP_HEADERS;
-                    r->cgi->dir = TO_CLIENT;
+                    r->cgi.op.scgi = SCGI_SEND_HTTP_HEADERS;
+                    r->io_direct = TO_CLIENT;
                     r->sock_timer = 0;
                 }
             }
             else // ret == 0
                 r->sock_timer = 0;
         }
-        else if (r->cgi->op.scgi == SCGI_SEND_HTTP_HEADERS)
+        else if (r->cgi.op.scgi == SCGI_SEND_HTTP_HEADERS)
         {
             if (r->resp_headers.len > 0)
             {
@@ -428,15 +428,15 @@ void scgi_worker(Connect* r)
                         }
                         else
                         {
-                            r->cgi->op.scgi = SCGI_SEND_ENTITY;
+                            r->cgi.op.scgi = SCGI_SEND_ENTITY;
                             r->sock_timer = 0;
                             if (r->lenTail > 0)
                             {
-                                r->cgi->p = r->tail;
-                                r->cgi->len_buf = r->lenTail;
+                                r->cgi.p = r->tail;
+                                r->cgi.len_buf = r->lenTail;
                                 r->tail = NULL;
                                 r->lenTail = 0;
-                                r->cgi->dir = TO_CLIENT;
+                                r->io_direct = TO_CLIENT;
                                 if (r->mode_send == CHUNK)
                                 {
                                     if (cgi_set_size_chunk(r))
@@ -449,9 +449,9 @@ void scgi_worker(Connect* r)
                             }
                             else
                             {
-                                r->cgi->len_buf = 0;
-                                r->cgi->p = NULL;
-                                r->cgi->dir = FROM_CGI;
+                                r->cgi.len_buf = 0;
+                                r->cgi.p = NULL;
+                                r->io_direct = FROM_CGI;
                             }
                         }
                     }
@@ -469,7 +469,7 @@ void scgi_worker(Connect* r)
                 end_response(r);
             }
         }
-        else if (r->cgi->op.scgi == SCGI_SEND_ENTITY)
+        else if (r->cgi.op.scgi == SCGI_SEND_ENTITY)
         {
             int ret = cgi_stdout(r);
             if (ret < 0)
@@ -493,7 +493,7 @@ void scgi_worker(Connect* r)
         }
         else
         {
-            print_err(r, "<%s:%d> ??? Error: SCGI_OPERATION=%s\n", __func__, __LINE__, get_scgi_operation(r->cgi->op.scgi));
+            print_err(r, "<%s:%d> ??? Error: SCGI_OPERATION=%s\n", __func__, __LINE__, get_scgi_operation(r->cgi.op.scgi));
             r->err = -1;
             del_from_list(r);
             end_response(r);
@@ -501,12 +501,12 @@ void scgi_worker(Connect* r)
     }
 }
 //======================================================================
-int timeout_scgi(Connect *r)
+int scgi_err(Connect *r)
 {
-    if (((r->cgi->op.scgi == SCGI_PARAMS) || (r->cgi->op.scgi == SCGI_STDIN)) && 
-         (r->cgi->dir == TO_CGI))
+    if (((r->cgi.op.scgi == SCGI_PARAMS) || (r->cgi.op.scgi == SCGI_STDIN)) && 
+         (r->io_direct == TO_CGI))
         return -RS504;
-    else if (r->cgi->op.scgi == SCGI_READ_HTTP_HEADERS)
+    else if (r->cgi.op.scgi == SCGI_READ_HTTP_HEADERS)
         return -RS504;
     else
         return -1;
